@@ -26,6 +26,7 @@ import {
 } from "./notifications";
 import { logout, getActiveUser, signup, login } from "./localAuth";
 import { resetCurrentUserData } from "./state";
+import { recordActivity, getActivityDays } from "./activity";
 
 export const App: React.FC = () => {
   const [data, setData] = useState<{
@@ -66,6 +67,9 @@ export const App: React.FC = () => {
   );
   const [prefReducedMotion, setPrefReducedMotion] = useState(
     () => localStorage.getItem("dsa-pref-reduced-motion") === "1"
+  );
+  const [activityDays, setActivityDays] = useState<string[]>(() =>
+    getActivityDays()
   );
 
   // React to preference changes (focus preference applies / reverts only if it auto-applied)
@@ -278,16 +282,27 @@ export const App: React.FC = () => {
           <WeekBoard
             week={activeWeek}
             topics={data.topics}
-            onStatusChange={(id: string, status: TopicStatus) =>
-              store.setStatus(id, status)
-            }
-            onAddNote={(id: string, note: string) =>
-              store.addDailyNote(id, note)
-            }
+            onStatusChange={(id: string, status: TopicStatus) => {
+              store.setStatus(id, status);
+              recordActivity();
+              setActivityDays(getActivityDays());
+            }}
+            onAddNote={(id: string, note: string) => {
+              store.addDailyNote(id, note);
+              recordActivity();
+              setActivityDays(getActivityDays());
+            }}
           />
         </div>
         <div className="flex flex-col gap-6 focus-core min-w-0">
-          <DailyPanel tasks={todayTasks} onToggle={(id) => toggleTask(id)} />
+          <DailyPanel
+            tasks={todayTasks}
+            onToggle={(id) => {
+              toggleTask(id);
+              recordActivity();
+              setActivityDays(getActivityDays());
+            }}
+          />
           <section className="panel-alt space-y-3">
             <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
               Motivation{" "}
@@ -316,6 +331,7 @@ export const App: React.FC = () => {
               : ""
           } transition min-w-0`}
         >
+          <StreakHeatmap days={activityDays} />
           <LeaderboardMock />
           <NotificationPanel
             status={notifStatus}
@@ -529,46 +545,59 @@ const LevelBadge: React.FC<{
 const DailyPanel: React.FC<{
   tasks: DailyTask[];
   onToggle: (id: string) => void;
-}> = ({ tasks, onToggle }) => (
-  <section className="bg-gray-900 rounded-xl p-4 ring-1 ring-gray-800 space-y-3 overflow-hidden">
-    <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-      Today <span className="text-[10px] text-gray-500">Daily Plan</span>
-    </h2>
-    {tasks.length === 0 && (
-      <div className="text-[11px] text-gray-500">
-        No tasks generated for today.
-      </div>
-    )}
-    <ul className="space-y-2">
-      {tasks.map((t) => (
-        <li key={t.id} className="flex items-center gap-3 text-xs min-w-0">
-          <button
-            onClick={() => onToggle(t.id)}
-            className={`w-4 h-4 rounded border flex items-center justify-center ${
-              t.done
-                ? "bg-emerald-500/30 border-emerald-400"
-                : "border-gray-600"
-            }`}
-          >
-            {t.done && "✓"}
-          </button>
-          <span
-            className={`flex-1 truncate ${
-              t.done ? "line-through text-gray-500" : "text-gray-200"
-            }`}
-          >
-            {t.title}
-          </span>
-          {t.prereq && !t.done && (
-            <span className="text-[10px] text-amber-400 ml-auto">
-              Prereq: {t.prereq}
+}> = ({ tasks, onToggle }) => {
+  // Map topicId to label for friendlier display
+  const topicMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of topics) map[t.id] = t.label;
+    return map;
+  }, []);
+  return (
+    <section className="bg-gray-900 rounded-xl p-4 ring-1 ring-gray-800 space-y-3 overflow-hidden">
+      <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        Today <span className="text-[10px] text-gray-500">Daily Plan</span>
+      </h2>
+      {tasks.length === 0 && (
+        <div className="text-[11px] text-gray-500">
+          No tasks generated for today.
+        </div>
+      )}
+      <ul className="space-y-2">
+        {tasks.map((t) => (
+          <li key={t.id} className="flex items-center gap-3 text-xs min-w-0">
+            <button
+              onClick={() => onToggle(t.id)}
+              className={`w-4 h-4 rounded border flex items-center justify-center ${
+                t.done
+                  ? "bg-emerald-500/30 border-emerald-400"
+                  : "border-gray-600"
+              }`}
+            >
+              {t.done && "✓"}
+            </button>
+            <span
+              className={`flex-1 truncate ${
+                t.done ? "line-through text-gray-500" : "text-gray-200"
+              }`}
+            >
+              {t.topicId && topicMap[t.topicId]
+                ? `${topicMap[t.topicId]} (${t.title.replace(
+                    /Learn & practice: /,
+                    ""
+                  )})`
+                : t.title}
             </span>
-          )}
-        </li>
-      ))}
-    </ul>
-  </section>
-);
+            {t.prereq && !t.done && (
+              <span className="text-[10px] text-amber-400 ml-auto">
+                Prereq: {t.prereq}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 const ReviewSuggestions: React.FC<{ items: TopicProgress[] }> = ({ items }) => (
   <section className="bg-gray-900 rounded-xl p-4 ring-1 ring-gray-800 space-y-2">
@@ -587,6 +616,85 @@ const ReviewSuggestions: React.FC<{ items: TopicProgress[] }> = ({ items }) => (
     </ul>
   </section>
 );
+
+// Streak / Activity Heatmap similar to GitHub contribution graph (last 8 weeks)
+const StreakHeatmap: React.FC<{ days: string[] }> = ({ days }) => {
+  const today = new Date();
+  // Build 8 weeks (56 days) ending today
+  const cells: { date: Date; iso: string; active: boolean }[] = [];
+  for (let i = 55; i >= 0; i--) {
+    const d = new Date(today.getTime());
+    d.setDate(today.getDate() - i);
+    const iso = format(d, "yyyy-MM-dd");
+    cells.push({ date: d, iso, active: days.includes(iso) });
+  }
+  const weeks: (typeof cells)[] = [];
+  for (let w = 0; w < 8; w++) weeks.push(cells.slice(w * 7, w * 7 + 7));
+  function tone(idx: number): string {
+    return [
+      "bg-gray-800 border-gray-700",
+      "bg-emerald-900/60 border-emerald-700/60",
+      "bg-emerald-800/60 border-emerald-600/60",
+      "bg-emerald-600/60 border-emerald-500/60",
+      "bg-emerald-400/60 border-emerald-300/60",
+    ][idx];
+  }
+  return (
+    <section className="bg-gray-900 rounded-xl p-4 ring-1 ring-gray-800 space-y-3">
+      <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        Activity
+        <span className="text-[10px] text-gray-500">Last 8 Weeks</span>
+      </h2>
+      <div className="flex gap-1">
+        {weeks.map((w, wi) => (
+          <div key={wi} className="flex flex-col gap-1">
+            {w.map((c, di) => {
+              const dayOfWeek = c.date.getDay();
+              const active = c.active;
+              // intensity scaling: cluster streaks
+              let streakDepth = 0;
+              if (active) {
+                // look backwards up to 3 days for streak length
+                for (let back = 1; back <= 3; back++) {
+                  const prev = new Date(c.date.getTime());
+                  prev.setDate(c.date.getDate() - back);
+                  const isoPrev = format(prev, "yyyy-MM-dd");
+                  if (days.includes(isoPrev)) streakDepth++;
+                  else break;
+                }
+              }
+              const cls = active ? tone(Math.min(4, 1 + streakDepth)) : tone(0);
+              return (
+                <div
+                  key={di}
+                  className={`w-3 h-3 rounded-sm border ${cls} relative group`}
+                  title={`${c.iso}${active ? " • Active" : ""}`}
+                >
+                  <span className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-[9px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition shadow border border-gray-700">
+                    {c.iso}
+                    {active ? " • Active day" : ""}
+                  </span>
+                  {dayOfWeek === 1 && wi % 2 === 0 && di === 1 && (
+                    <span className="sr-only">Week {wi + 1}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 justify-end text-[9px] text-gray-500">
+        <span>Less</span>
+        <div className="flex gap-1">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className={`w-3 h-3 rounded-sm border ${tone(i)}`} />
+          ))}
+        </div>
+        <span>More</span>
+      </div>
+    </section>
+  );
+};
 
 const achievementMeta: Record<
   string,
@@ -1175,6 +1283,66 @@ const SettingsPanel: React.FC<{
                 stored locally per account. Clearing data wipes only the current
                 account's study state (not the account itself).
               </p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    // Export: gather all relevant keys and download as JSON
+                    const keys = [
+                      "dsa-habit-progress-v1",
+                      "dsa-habit-streak-v1",
+                      "dsa-habit-last-active",
+                      "dsa-habit-xp-v1",
+                      "dsa-habit-achievements-v1",
+                      "dsa-habit-version",
+                    ];
+                    const data: Record<string, any> = {};
+                    keys.forEach((k) => {
+                      const v = localStorage.getItem(k);
+                      if (v !== null) data[k] = v;
+                    });
+                    const blob = new Blob([JSON.stringify(data, null, 2)], {
+                      type: "application/json",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "algo-habit-backup.json";
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }, 100);
+                  }}
+                  className="text-[11px] px-3 py-1.5 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/30"
+                >
+                  Export Data
+                </button>
+                <label className="text-[11px] px-3 py-1.5 rounded bg-green-500/20 text-green-300 hover:bg-green-500/30 border border-green-500/30 cursor-pointer">
+                  Import Data
+                  <input
+                    type="file"
+                    accept="application/json"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        if (typeof data !== "object" || Array.isArray(data))
+                          throw new Error("Invalid format");
+                        Object.entries(data).forEach(([k, v]) => {
+                          if (typeof v === "string") localStorage.setItem(k, v);
+                        });
+                        window.location.reload();
+                      } catch {
+                        alert("Import failed: invalid file.");
+                      }
+                    }}
+                  />
+                </label>
+              </div>
               <button
                 onClick={() => setConfirming(true)}
                 className="text-[11px] px-3 py-1.5 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30"

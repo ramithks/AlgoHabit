@@ -106,38 +106,40 @@ export const WeekBoard: React.FC<Props> = ({
             className="flex flex-col gap-1 rounded border border-gray-800 hover:border-gray-700 transition p-3 bg-gray-950/50 focus-within:ring-1 focus-within:ring-accent/30 backdrop-blur-sm"
           >
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => cycleStatus(t)}
-                aria-label={`Change status (current: ${labelForStatus(
-                  t.status
-                )})`}
-                role="button"
-                className={`transition-all motion-safe:active:scale-95 shrink-0 w-28 text-left text-[11px] px-2 py-1 rounded font-medium tracking-wide focus:outline-none focus:ring-2 focus:ring-accent/40 relative overflow-hidden ${statusClasses(
-                  t.status
-                )}`}
-              >
-                <span className="relative z-10 flex items-center gap-1">
-                  {iconForStatus(t.status)} {labelForStatus(t.status)}
-                </span>
-                <span className="absolute inset-0 opacity-0 hover:opacity-15 transition bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
-              </button>
               <div className="flex-1 min-w-0">
                 <div
-                  className="text-xs font-medium text-gray-200 truncate"
+                  className="text-base font-semibold text-accent truncate mb-0.5"
                   title={t.label}
                 >
                   {t.label}
                 </div>
-                <div className="text-[10px] text-gray-500 truncate">
+                <div className="text-[10px] text-gray-500 truncate mb-1">
                   Ref: {t.cheatSheetRef}
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => cycleStatus(t)}
+                    aria-label={`Change status (current: ${labelForStatus(
+                      t.status
+                    )})`}
+                    role="button"
+                    className={`transition-all motion-safe:active:scale-95 shrink-0 w-28 text-left text-[11px] px-2 py-1 rounded font-medium tracking-wide focus:outline-none focus:ring-2 focus:ring-accent/40 relative overflow-hidden ${statusClasses(
+                      t.status
+                    )}`}
+                  >
+                    <span className="relative z-10 flex items-center gap-1">
+                      {iconForStatus(t.status)} {labelForStatus(t.status)}
+                    </span>
+                    <span className="absolute inset-0 opacity-0 hover:opacity-15 transition bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
+                  </button>
+                  <NoteInput
+                    topicId={t.id}
+                    value={noteDraft[t.id] || ""}
+                    onChange={(v) => setNoteDraft((d) => ({ ...d, [t.id]: v }))}
+                    onCommit={(val) => onAddNote(t.id, val)}
+                  />
+                </div>
               </div>
-              <NoteInput
-                topicId={t.id}
-                value={noteDraft[t.id] || ""}
-                onChange={(v) => setNoteDraft((d) => ({ ...d, [t.id]: v }))}
-                onCommit={(val) => onAddNote(t.id, val)}
-              />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-[10px] text-gray-500">
               {t.lastTouched && <div>Last: {t.lastTouched}</div>}
