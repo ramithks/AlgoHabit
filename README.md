@@ -1,6 +1,9 @@
 # AlgoHabit
 
-Focused, gamified habit & progress companion for an 8‑week DSA roadmap. No problem solving UI: all coding happens on LeetCode. AlgoHabit enforces consistency, visibility, motivation, and light gamification.
+Focused, lightweight habit & progress companion for an 8‑week DSA roadmap (all solving happens on LeetCode). Drives consistency, visibility, motivation & light gamification.
+
+Live App: https://ramithks.github.io/AlgoHabit/
+Cheat Sheet (printable): `DSA_LeetCode_Cheatsheet.pdf`
 
 ## Feature Mapping to Cheat Sheet & Weeks
 
@@ -16,43 +19,28 @@ Focused, gamified habit & progress companion for an 8‑week DSA roadmap. No pro
 | Leaderboard mock (points)                                                  | Optional gamification                                               | All     |
 | Topic linking via cheatSheetRef                                            | Each cheat sheet heading                                            | All     |
 
-## Core Data Model
-
-- Topic: id, label, week, category, cheatSheetRef
-- TopicProgress: Topic + status, lastTouched, dailyNotes
-- AppState persisted in localStorage with streak logic (resets after >1 day gap)
+## Data Model (Brief)
+Topic (id, label, week, category, cheatSheetRef) + progress fields (status, lastTouched, dailyNotes, xp flags) stored locally (per user) in versioned localStorage.
 
 ## Status Flow
 
 Button cycles: Not Started → In Progress → Complete → Skipped → …
 Skipped remains visible (cannot silently drop) preventing unnoticed omissions.
 
-## Streak & XP Logic
+## Streak & XP
+Daily activity maintains streak; 1+ day gap resets. XP awards on first in‑progress & completion per topic; level curve non‑linear.
 
-- Increment if user active on consecutive day.
-- Reset to 1 if gap >1 day.
-- Nudges derived from missed days heuristics.
-
-## Weekly Review & Suggestions
-
-Shows counts + progress bar; calls out remaining topics or congratulates when week locked.
+## Weekly Review
+Progress counts, remaining topics callouts, simple review suggestions.
 
 ## Notifications
+In-tab (service worker assisted) reminders only; no server push.
 
-- In-tab only (setTimeout + Service Worker immediate notifications)
-- Requires page open (no server push). Graceful fallback if permission denied.
+## Mock Leaderboard
+Simple points (complete=10, in-progress=3) – placeholder for future backend.
 
-## Leaderboard (Mock)
-
-- Points: complete=10, in-progress=3, skipped=0 (demo only until backend introduced).
-
-## Tech Stack
-
-- React + Vite + TypeScript
-- Tailwind CSS (custom panel utilities, gradients)
-- date-fns for dates
-- LocalStorage (versioned schema) + light migration hook
-- Service Worker (notification display, no external push)
+## Tech
+React + Vite + TypeScript, Tailwind CSS, date-fns, Service Worker (local only), localStorage (versioned, migratable).
 
 ## Local Development
 
@@ -68,23 +56,35 @@ npm run build
 npm run preview
 ```
 
-## Current Enhancements Implemented
+## Implemented Highlights
+- Level curve + progress ring & XP delta pulse
+- Achievements toast + (optional) confetti
+- Focus mode & command palette (⌘/Ctrl+K)
+- Timestamps, contextual suggestions
+- Import / Export JSON (Settings)
+- 8‑week activity heatmap (streak intensity)
+- Daily schedule generator (learn / reinforce / review cadence)
+- Auto deploy via GitHub Actions → gh-pages
 
-- Non-linear level curve & dynamic progress ring
-- XP deltas & level-up pulse animation
-- Achievement toast + confetti (suppressed easily for reduced motion later)
-- Focus mode (side-rail suppression)
-- Command palette (⌘/Ctrl + K) for week jumps
-- Status timestamps (lastTouched) & contextual review suggestions
+## Roadmap (Short)
+- Spaced repetition & retention heatmap
+- Pomodoro / quiet hours
+- Achievement tiers & combo multipliers
+- Reduced motion & high contrast / themes
+- PWA offline support
+- Shareable snapshot card
 
-## Planned / Potential Enhancements
+## Deployment
+GitHub Actions builds & publishes to `gh-pages` on push to `main` (base `/AlgoHabit/`).
 
-- Spaced repetition scheduling & heatmap
-- Persist filter per week & more ARIA roles
-- Pomodoro / focus session timer & quiet hours
-- Tiered achievements / XP combo multiplier / streak freeze token
-- Reduced motion & high contrast toggles
-- Theme variants & shareable snapshot card
+## Data Portability
+Settings → Data: Export (JSON snapshot) & Import (restore entire state).
+
+## Activity Heatmap
+8-week contribution-style grid; greener = deeper recent streak cluster.
+
+## License
+MIT License (see `LICENSE`).
 
 ## Keyboard Shortcuts
 
