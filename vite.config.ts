@@ -3,5 +3,5 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: '/AlgoHabit/', // Set base for GitHub Pages
+  base: "/AlgoHabit/", // Set base for GitHub Pages
 });
