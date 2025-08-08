@@ -15,6 +15,8 @@ function load(): string[] {
   }
 }
 
+
+
 export function getActivityDays(): string[] {
   return load();
 }
