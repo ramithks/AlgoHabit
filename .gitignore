@@ -32,7 +32,8 @@ coverage/
 # Local storage export backups (if reintroduced later)
 *.backup.json
 
-# Generated lock files (choose one; keep others ignored if not used)
-package-lock.json
+# Generated lock files
+# We will commit package-lock.json for reproducible CI builds
+# (If switching managers later, adjust accordingly.)
 pnpm-lock.yaml
 yarn.lock
