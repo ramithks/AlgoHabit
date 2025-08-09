@@ -303,6 +303,11 @@ export const App: React.FC = () => {
               setActivityDays(getActivityDays());
             }}
           />
+          {!focusMode && (
+            <div className="xl:hidden">
+              <StreakHeatmap days={activityDays} />
+            </div>
+          )}
           <section className="panel-alt space-y-3">
             <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
               Motivation{" "}
