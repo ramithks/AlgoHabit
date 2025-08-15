@@ -112,6 +112,44 @@ MIT License (see `LICENSE`).
 - Motion guarded with `motion-safe`
 - Gradual introduction of semantic headings & focus indicators
 
+## Database Technology Recommendation
+
+📋 **[View Complete Database Recommendation](./DATABASE_RECOMMENDATION.md)**
+
+**Summary**: For production deployment and multi-device sync, we recommend **PostgreSQL** as the database technology. The current localStorage implementation is excellent for the MVP, but PostgreSQL provides:
+
+- **Data Persistence**: Reliable storage across devices and sessions
+- **Multi-Device Sync**: Access your progress from anywhere
+- **Advanced Analytics**: Complex queries for progress insights
+- **Scalability**: Support for multiple users and future features
+
+**Key Benefits**:
+- Strong data integrity with ACID compliance
+- Excellent support for time-series data (streaks, daily notes)
+- JSON fields for flexible metadata storage
+- Rich ecosystem and cloud hosting options
+
+📖 **[Implementation Guide](./IMPLEMENTATION_GUIDE.md)** - Complete technical roadmap for migrating from localStorage to PostgreSQL with code examples and deployment strategies.
+
+## Current Architecture (localStorage)
+
+The app currently uses browser localStorage for all data persistence:
+
+- ✅ **Perfect for MVP**: Zero backend complexity
+- ✅ **Fast & Responsive**: Instant data access
+- ❌ **Single Device**: Data doesn't sync across devices
+- ❌ **Data Loss Risk**: Browser storage can be cleared
+
+## Future Architecture (PostgreSQL + API)
+
+The recommended production architecture includes:
+
+- **Frontend**: React + TypeScript (unchanged)
+- **Backend**: Node.js + Express + TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: JWT tokens
+- **Hosting**: Vercel (frontend) + Railway (backend + database)
+
 ## Disclaimer
 
 All algorithm practice & problem statements stay external (e.g. LeetCode). This app tracks habit + meta only.
