@@ -1,88 +1,79 @@
-// Local-only pseudo authentication (NOT for production security).
-// Provides signup, login, logout with per-user namespaced localStorage state.
-// NO server, NO third-party services.
-
+// Supabase Email Auth wrappers + validation
+import { getSupabase } from "../lib/supabaseClient";
 import { setActiveUser } from "./state";
 
-interface StoredUser {
-  id: string; // slug / uuid-like (email sanitized)
-  email: string;
-  passHash: string; // salted SHA-256
-  salt: string;
-  createdAt: string;
-  lastLogin?: string;
-}
+export type ActiveUser = { id: string; email?: string | null };
 
-const USERS_KEY = "dsa-auth-users";
 const ACTIVE_KEY = "dsa-auth-active-user";
 
-function loadUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function validateEmail(email: string) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!re.test(email)) throw new Error("Enter a valid email address");
 }
 
-function saveUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+export function validatePassword(password: string) {
+  if (!password || password.length < 8)
+    throw new Error("Min 8 characters required");
+  if (!/[a-z]/.test(password)) throw new Error("Include a lowercase letter");
+  if (!/[A-Z]/.test(password)) throw new Error("Include an uppercase letter");
+  if (!/[0-9]/.test(password)) throw new Error("Include a digit");
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password))
+    throw new Error("Include a symbol");
 }
 
-export function getActiveUser(): StoredUser | null {
+export function getActiveUser(): ActiveUser | null {
   const id = localStorage.getItem(ACTIVE_KEY);
   if (!id) return null;
-  return loadUsers().find((u) => u.id === id) || null;
+  return { id };
 }
 
-async function hashPassword(password: string, salt: string): Promise<string> {
-  const enc = new TextEncoder().encode(password + salt);
-  const digest = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export async function signup(email: string, password: string) {
-  const users = loadUsers();
-  if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-    throw new Error("Email already registered");
+export async function signup(
+  email: string,
+  password: string,
+  confirm?: string
+) {
+  email = email.trim();
+  validateEmail(email);
+  validatePassword(password);
+  if (confirm != null && password !== confirm)
+    throw new Error("Passwords do not match");
+  const supabase = getSupabase();
+  const { error, data } = await supabase.auth.signUp({ email, password });
+  if (error) throw new Error(error.message);
+  // If email confirmation is enabled, data.session will be null.
+  if (!data.session) {
+    return { status: "confirmation_sent" as const };
   }
-  const salt = Math.random().toString(36).slice(2, 10);
-  const passHash = await hashPassword(password, salt);
-  const id = email.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const user: StoredUser = {
-    id,
-    email,
-    salt,
-    passHash,
-    createdAt: new Date().toISOString(),
+  const uid = data.session.user.id;
+  localStorage.setItem(ACTIVE_KEY, uid);
+  setActiveUser(uid);
+  return {
+    status: "ok" as const,
+    user: { id: uid, email } satisfies ActiveUser,
   };
-  users.push(user);
-  saveUsers(users);
-  localStorage.setItem(ACTIVE_KEY, id);
-  setActiveUser(id);
-  return user;
 }
 
 export async function login(email: string, password: string) {
-  const users = loadUsers();
-  const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (!user) throw new Error("Invalid credentials");
-  const passHash = await hashPassword(password, user.salt);
-  if (passHash !== user.passHash) throw new Error("Invalid credentials");
-  user.lastLogin = new Date().toISOString();
-  saveUsers(users);
-  localStorage.setItem(ACTIVE_KEY, user.id);
-  setActiveUser(user.id);
-  return user;
+  email = email.trim();
+  validateEmail(email);
+  if (!password) throw new Error("Password is required");
+  const supabase = getSupabase();
+  const { error, data } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) throw new Error(error.message);
+  const uid = data.user?.id;
+  if (uid) {
+    localStorage.setItem(ACTIVE_KEY, uid);
+    setActiveUser(uid);
+  }
+  return { id: uid || "", email } satisfies ActiveUser;
 }
 
-export function logout() {
+export async function logout() {
+  const supabase = getSupabase();
+  await supabase.auth.signOut();
   localStorage.removeItem(ACTIVE_KEY);
   setActiveUser("shared");
-}
-
-export function listUsers(): StoredUser[] {
-  return loadUsers();
 }

@@ -148,10 +148,7 @@ button:has(> span > span > span) { transition: background var(--transition); }
 /* Motion reduction hook */
 .reduced-motion *, .reduced-motion *::before, .reduced-motion *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:0ms !important; }
 
-.focus-mode main > *:not(.focus-core) {
-  filter: blur(2px) brightness(0.9);
-  pointer-events: none;
-}
+.focus-mode main > *:not(.focus-core) { display: none !important; }
 
 .glass-sheen {
   position: relative;
