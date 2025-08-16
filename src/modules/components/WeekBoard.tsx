@@ -223,7 +223,7 @@ const NoteInput: React.FC<{
       setPending(false);
     }, 500);
     return () => clearTimeout(id);
-  }, [value]);
+  }, [value, onCommit]);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
       <input

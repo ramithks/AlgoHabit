@@ -26,7 +26,9 @@ export function contextualMotivation(ctx: MotivationContext) {
       ctx.topics.length) *
       100
   );
-  const advice = ADVICES[Math.floor(Math.random() * ADVICES.length)];
+  // Deterministic daily tip: stable for a given date
+  const daySeed = parseInt(format(now, "yyyyMMdd"), 10);
+  const advice = ADVICES[daySeed % ADVICES.length];
   const li = levelInfo(ctx.xp);
   return [
     `Good ${part}. ${pct}% complete. ${pending} topics remain—chip one now.`,

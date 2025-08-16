@@ -1,5 +1,5 @@
 import { generateDailyPlan, DailyTask } from "./schedule";
-import { formatISO } from "date-fns";
+// import { formatISO } from "date-fns";
 
 const TASK_KEY = "dsa-habit-daily-plan-v1";
 
@@ -35,6 +35,13 @@ export function toggleTask(id: string) {
 
 export function regeneratePlan(start = new Date()) {
   tasks = generateDailyPlan(start);
+  persist();
+  emit();
+}
+
+// Hydrate tasks from an external source (e.g., cloud). Persists and notifies subscribers.
+export function hydrateTasks(newTasks: DailyTask[]) {
+  tasks = newTasks;
   persist();
   emit();
 }

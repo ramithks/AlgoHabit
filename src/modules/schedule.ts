@@ -14,7 +14,7 @@ export interface DailyTask {
 // Generate an 8-week (56 day) schedule with learning tasks first 5 days, day6 reinforce, day7 review/catchup.
 export function generateDailyPlan(start: Date): DailyTask[] {
   const days: DailyTask[] = [];
-  const startISO = formatISO(start, { representation: "date" });
+  // const startISO = formatISO(start, { representation: "date" });
   // Map weeks -> topics sequentially
   const topicsByWeek = new Map<number, string[]>(
     Array.from({ length: 8 }, (_, i) => [
@@ -22,7 +22,7 @@ export function generateDailyPlan(start: Date): DailyTask[] {
       topics.filter((t) => t.week === i + 1).map((t) => t.id),
     ])
   );
-  let topicPointer: Record<number, number> = {};
+  const topicPointer: Record<number, number> = {};
   for (let w = 1; w <= 8; w++) topicPointer[w] = 0;
 
   for (let offset = 0; offset < 56; offset++) {
@@ -52,7 +52,7 @@ export function generateDailyPlan(start: Date): DailyTask[] {
           id: `task-${iso}-buffer`,
           date: iso,
           kind: "reinforce",
-          title: "Reinforce earlier topics / extra LeetCode set",
+          title: "Reinforce earlier topics / extra practice set",
           done: false,
         });
       }

@@ -1,4 +1,4 @@
-import { store } from "./state";
+// import { store } from "./state"; // reserved for future use
 
 export function exportProgress() {
   try {

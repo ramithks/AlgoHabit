@@ -11,6 +11,7 @@ import {
   XP_VALUES,
   STREAK_THRESHOLDS,
 } from "./constants";
+// Supabase client now uses Auth session; no manual header refresh needed.
 
 let storagePrefix = "dsa-"; // updated per active user
 function key(k: string) {
@@ -94,6 +95,7 @@ export type Listener = (s: AppState) => void;
 class Store {
   private state: AppState = loadState();
   private listeners: Set<Listener> = new Set();
+  private onExternalChange?: (s: AppState) => void;
 
   subscribe(l: Listener) {
     this.listeners.add(l);
@@ -104,33 +106,64 @@ class Store {
   private emit() {
     persist(this.state);
     this.listeners.forEach((l) => l(this.state));
+    if (this.onExternalChange) this.onExternalChange(this.state);
   }
 
   updateTopic(id: string, patch: Partial<TopicProgress>) {
     this.state.topics = this.state.topics.map((t) => {
       if (t.id !== id) return t;
       const prevStatus = t.status;
-      const next = { ...t, ...patch };
-      // Award XP only on first transition into statuses
-      if (!next.xpFlags) next.xpFlags = { ...t.xpFlags };
+      const nextStatus = (patch.status ?? t.status) as TopicStatus;
+      const next: TopicProgress = {
+        ...t,
+        ...patch,
+        status: nextStatus,
+      } as TopicProgress;
+      // Ensure xpFlags exists
+      if (!next.xpFlags)
+        next.xpFlags = { ...((t as any).xpFlags || {}) } as any;
+      const xpFlags = (next.xpFlags = next.xpFlags || ({} as any));
+      const today = formatISO(new Date(), { representation: "date" });
+      // Award on entering statuses (first time)
       if (
         prevStatus !== "in-progress" &&
-        next.status === "in-progress" &&
-        !next.xpFlags?.inProgress
+        nextStatus === "in-progress" &&
+        !xpFlags.inProgress
       ) {
-        this.addXP(XP_VALUES.IN_PROGRESS_AWARD);
-        next.xpFlags!.inProgress = true;
-        next.lastTouched = formatISO(new Date(), { representation: "date" });
+        this.state.xp += XP_VALUES.IN_PROGRESS_AWARD;
+        xpFlags.inProgress = true;
+        next.lastTouched = today;
       }
       if (
         prevStatus !== "complete" &&
-        next.status === "complete" &&
-        !next.xpFlags?.complete
+        nextStatus === "complete" &&
+        !xpFlags.complete
       ) {
-        this.addXP(XP_VALUES.COMPLETE_AWARD);
-        next.xpFlags!.complete = true;
-        // mark completion time
-        next.lastTouched = formatISO(new Date(), { representation: "date" });
+        this.state.xp += XP_VALUES.COMPLETE_AWARD;
+        xpFlags.complete = true;
+        next.lastTouched = today;
+      }
+      // Handle undo: leaving statuses should remove previously granted XP
+      if (
+        prevStatus === "in-progress" &&
+        nextStatus !== "in-progress" &&
+        xpFlags.inProgress
+      ) {
+        this.state.xp = Math.max(
+          0,
+          this.state.xp - XP_VALUES.IN_PROGRESS_AWARD
+        );
+        xpFlags.inProgress = false;
+        next.lastTouched = today;
+      }
+      if (
+        prevStatus === "complete" &&
+        nextStatus !== "complete" &&
+        xpFlags.complete
+      ) {
+        this.state.xp = Math.max(0, this.state.xp - XP_VALUES.COMPLETE_AWARD);
+        xpFlags.complete = false;
+        next.lastTouched = today;
       }
       return next;
     });
@@ -229,6 +262,22 @@ class Store {
     };
     this.emit();
   }
+
+  // Replace current state with provided (e.g., from cloud). Persists and notifies.
+  hydrate(next: AppState) {
+    this.state = next;
+    this.emit();
+  }
+
+  // Minimal JSON for upload (topics + streak + lastActive + xp + achievements)
+  serialize(): AppState {
+    return JSON.parse(JSON.stringify(this.state));
+  }
+
+  // Allow cloud module to subscribe to local changes
+  onChange(cb: (s: AppState) => void) {
+    this.onExternalChange = cb;
+  }
 }
 
 export const store = new Store();
@@ -303,7 +352,7 @@ export function levelInfo(xp: number): LevelInfo {
     level += 1;
     threshold = Math.round(threshold * 1.25);
   }
-  const pct = Math.min(99.9, (remaining / threshold) * 100);
+  const pct = Math.min(100, (remaining / threshold) * 100);
   return {
     level,
     xpInto: remaining,
