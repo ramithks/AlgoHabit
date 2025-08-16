@@ -66,17 +66,7 @@ export const FocusClock: React.FC = () => {
     .toString()
     .padStart(2, "0");
 
-  // Quick keyboard shortcut: Space to start/stop
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.code === "Space") {
-        e.preventDefault();
-        running ? stop() : start();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [running]);
+  // Keyboard shortcut removed to avoid interfering with typing in inputs
 
   return (
     <section className="bg-gray-900 rounded-xl p-4 ring-1 ring-gray-800 space-y-3">
