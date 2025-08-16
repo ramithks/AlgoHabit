@@ -146,50 +146,7 @@ export interface Database {
           }
         ];
       };
-      tasks: {
-        Row: {
-          id: string;
-          user_id: string;
-          date: string; // date
-          kind: "learn" | "review" | "reinforce" | "plan";
-          title: string;
-          topic_id: string | null;
-          prereq: string | null;
-          done: boolean;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          date: string;
-          kind: "learn" | "review" | "reinforce" | "plan";
-          title: string;
-          topic_id?: string | null;
-          prereq?: string | null;
-          done?: boolean;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          date?: string;
-          kind?: "learn" | "review" | "reinforce" | "plan";
-          title?: string;
-          topic_id?: string | null;
-          prereq?: string | null;
-          done?: boolean;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "tasks_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
+      // tasks removed
       activity_log: {
         Row: {
           user_id: string;

@@ -1,5 +1,4 @@
 export * from "./LevelBadge";
-export * from "./DailyPanel";
 export * from "./NotificationPanel";
 export * from "./WeekBoard";
 export * from "./WeeklyReview";

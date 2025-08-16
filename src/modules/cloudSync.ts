@@ -2,8 +2,7 @@
 // Keeps localStorage as source of truth when offline, but mirrors to cloud when online.
 
 import { store } from "./state";
-import { hydrateTasks, subscribeTasks } from "./scheduleState";
-import { listTasks, upsertTasksBulk } from "./repos/tasksRepo";
+// Daily tasks removed: no schedule sync
 import { getActivityDays, upsertActivityDays } from "./repos/activityRepo";
 import { hydrateActivityDays, subscribeActivity } from "./activity";
 import { hasProfile } from "./repos/profilesRepo";
@@ -65,9 +64,7 @@ export async function pullAll() {
     });
     store.hydrate(next as any);
   }
-  // Pull tasks
-  const t = await listTasks(userId);
-  if (t) hydrateTasks(t);
+  // Daily tasks removed
   // Pull activity days
   const a = await getActivityDays(userId);
   if (a) hydrateActivityDays(a);
@@ -87,16 +84,7 @@ export function startAutoSync(intervalMs = 15000) {
     // fire and forget
     pushAll();
   });
-  // Push tasks whenever they change
-  const unsubTasks = subscribeTasks(async (items) => {
-    const userId = getCurrentUserId();
-    if (!userId) return;
-    const ok = await upsertTasksBulk(userId, items);
-    if (!ok) {
-      // eslint-disable-next-line no-console
-      console.error("Failed to push tasks for user", userId);
-    }
-  });
+  // Daily tasks removed
   // Push activity whenever it changes
   const unsubActivity = subscribeActivity(async (days) => {
     const userId = getCurrentUserId();
@@ -113,7 +101,6 @@ export function startAutoSync(intervalMs = 15000) {
   }, intervalMs);
   return () => {
     clearInterval(id);
-    unsubTasks?.();
     unsubActivity?.();
   };
 }

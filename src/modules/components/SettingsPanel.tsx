@@ -104,8 +104,8 @@ export const SettingsPanel: React.FC<{
             </h3>
             <div className="bg-gray-800/40 rounded p-4 space-y-4">
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Your progress, streak, XP, achievements, notes and tasks are
-                stored locally per account. Clearing data wipes only the current
+                Your progress, streak, XP, achievements and notes are stored
+                locally per account. Clearing data wipes only the current
                 account's study state (not the account itself).
               </p>
               <div className="flex gap-2 flex-wrap">

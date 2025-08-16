@@ -16,7 +16,6 @@ import {
   Timeline,
   WeekBoard,
   LevelBadge,
-  DailyPanel,
   NotificationPanel,
   StreakBadge,
   ProgressBar,
@@ -48,8 +47,7 @@ const CommandPaletteLazy = lazy(() =>
 const WeeklyReviewLazy = lazy(() =>
   import("./components/WeeklyReview").then((m) => ({ default: m.WeeklyReview }))
 );
-import { generateDailyPlan } from "./schedule";
-import { subscribeTasks, toggleTask, regeneratePlan } from "./scheduleState";
+// Daily tasks removed; no schedule imports
 import {
   ensureServiceWorker,
   requestNotificationPermission,
@@ -73,12 +71,7 @@ export const App: React.FC = () => {
   }>(() => ({ topics: [], streak: 0 }));
   const [activeWeek, setActiveWeek] = useState(1);
   const [quote, setQuote] = useState(randomQuote());
-  const [planStart] = useState(new Date());
-  const [dailyTasks, setDailyTasks] = useState(() =>
-    generateDailyPlan(planStart)
-  );
-  const todayISO = format(new Date(), "yyyy-MM-dd");
-  const todayTasks = dailyTasks.filter((d) => d.date === todayISO);
+  // Daily tasks removed
   const [notifStatus, setNotifStatus] = useState<
     NotificationPermission | "unsupported"
   >(() => ("Notification" in window ? Notification.permission : "unsupported"));
@@ -145,23 +138,15 @@ export const App: React.FC = () => {
         xp: (s as any).xp,
       })
     );
-    const unsubTasks = subscribeTasks(setDailyTasks);
     pullAll();
     const stopSync = startAutoSync();
     return () => {
       unsub();
-      unsubTasks();
       stopSync?.();
     };
   }, []);
 
-  // Ensure we always have tasks for "today"; if none, regenerate plan starting today
-  useEffect(() => {
-    if (!dailyTasks.some((t) => t.date === todayISO)) {
-      regeneratePlan(new Date());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayISO, dailyTasks.length]);
+  // Daily tasks removed
 
   useEffect(() => {
     const current = data.xp || 0;
@@ -187,15 +172,7 @@ export const App: React.FC = () => {
     ensureServiceWorker();
   }, []);
 
-  // Listen for on-demand plan regeneration (from DailyPanel empty state)
-  useEffect(() => {
-    function regen() {
-      regeneratePlan(new Date());
-    }
-    window.addEventListener("dsa-regenerate-plan" as any, regen);
-    return () =>
-      window.removeEventListener("dsa-regenerate-plan" as any, regen);
-  }, []);
+  // Daily tasks removed
 
   // initial focus state handled by the effect that watches prefFocusDefault
 

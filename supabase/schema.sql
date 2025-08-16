@@ -87,33 +87,14 @@ create table if not exists public.topic_daily_notes (
   primary key (user_id, topic_id, day)
 );
 
-do $$
-begin
-  create type task_kind as enum ('learn','review','reinforce','plan');
-exception
-  when duplicate_object then null;
-end;
-$$;
-
-create table if not exists public.tasks (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  date date not null,
-  kind task_kind not null,
-  title text not null,
-  topic_id text,
-  prereq text,
-  done boolean not null default false,
-  updated_at timestamptz not null default now()
-);
-create index if not exists idx_tasks_user_date on public.tasks(user_id, date);
+-- tasks table removed
 
 -- Performance indexes for normalized access patterns
 create index if not exists idx_topics_progress_user on public.topics_progress(user_id);
 create index if not exists idx_topics_progress_user_week on public.topics_progress(user_id, week);
 create index if not exists idx_topics_progress_user_status on public.topics_progress(user_id, status);
 create index if not exists idx_topic_daily_notes_user_day on public.topic_daily_notes(user_id, day);
-create index if not exists idx_tasks_user_done on public.tasks(user_id, done);
+-- tasks index removed
 
 -- Activity log (days user was active)
 create table if not exists public.activity_log (
@@ -128,7 +109,7 @@ alter table public.profiles enable row level security;
 alter table public.user_metrics enable row level security;
 alter table public.topics_progress enable row level security;
 alter table public.topic_daily_notes enable row level security;
-alter table public.tasks enable row level security;
+-- tasks RLS not applicable (table removed)
 alter table public.activity_log enable row level security;
 
 -- Policies: owners can read/write their rows (avoid per-row re-evaluation of auth.uid())
@@ -204,17 +185,7 @@ begin
   end if;
 end $$;
 
-do $$
-begin
-  if exists (
-    select 1 from pg_policies where schemaname='public' and tablename='tasks' and policyname='tasks rw'
-  ) then
-  execute 'alter policy "tasks rw" on public.tasks using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) )';
-  else
-    create policy "tasks rw" on public.tasks
-    for all using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) );
-  end if;
-end $$;
+-- tasks policy removed
 
 do $$
 begin
@@ -258,25 +229,14 @@ drop trigger if exists set_updated_at_topic_daily_notes on public.topic_daily_no
 create trigger set_updated_at_topic_daily_notes before update on public.topic_daily_notes
 for each row execute function public.set_updated_at();
 
-drop trigger if exists set_updated_at_tasks on public.tasks;
-create trigger set_updated_at_tasks before update on public.tasks
-for each row execute function public.set_updated_at();
+-- tasks trigger removed
 
 drop trigger if exists set_updated_at_activity_log on public.activity_log;
 create trigger set_updated_at_activity_log before update on public.activity_log
 for each row execute function public.set_updated_at();
 
 -- Migrate legacy JSON tables if present and revoke access to stop expensive anon writes
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'tasks' and column_name = 'items'
-  ) then
-    alter table public.tasks rename to tasks_legacy;
-  end if;
-end $$;
+-- legacy tasks table migration not applicable
 
 do $$
 begin
@@ -290,28 +250,19 @@ begin
 end $$;
 
 -- Revoke access from legacy tables if they exist (prevents costly anon upserts)
-do $$
-begin
-  if to_regclass('public.tasks_legacy') is not null then
-    revoke all on table public.tasks_legacy from public;
-    do $$ begin
-      execute 'revoke all on table public.tasks_legacy from anon';
-    exception when undefined_object then null; end $$;
-    do $$ begin
-      execute 'revoke all on table public.tasks_legacy from authenticated';
-    exception when undefined_object then null; end $$;
-  end if;
-end $$;
+-- legacy tasks revokes removed
 
 do $$
 begin
   if to_regclass('public.progress_legacy') is not null then
     revoke all on table public.progress_legacy from public;
-    do $$ begin
+    begin
       execute 'revoke all on table public.progress_legacy from anon';
-    exception when undefined_object then null; end $$;
-    do $$ begin
+    exception when undefined_object then null;
+    end;
+    begin
       execute 'revoke all on table public.progress_legacy from authenticated';
-    exception when undefined_object then null; end $$;
+    exception when undefined_object then null;
+    end;
   end if;
 end $$;
