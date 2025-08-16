@@ -19,7 +19,7 @@ Cheat Sheet (printable PDF included in repo)
 
 ## Tech
 
-React + Vite + TypeScript, Tailwind CSS, date-fns, Service Worker (local), localStorage.
+React + Vite + TypeScript, Tailwind CSS, date-fns, Supabase (Auth + Postgres with RLS), Service Worker (local notifications), localStorage (client cache & prefs).
 
 ## Develop
 
@@ -38,7 +38,7 @@ npm run preview
 ## Notes
 
 - Settings → Data: Export/Import your state (JSON)
-- Privacy: Supabase Auth is configured, your data syncs to the cloud
+- Privacy: Your study data is stored in Supabase Postgres (per account, RLS enforced). LocalStorage is used only for client cache/preferences.
 
 ## License
 
