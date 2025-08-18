@@ -57,9 +57,12 @@ function loadState(): AppState {
       if (Array.isArray(parsed)) topics = parsed; // legacy form
       else if (parsed && Array.isArray(parsed.topics)) topics = parsed.topics; // future form
     }
-    // Backfill xpFlags for legacy records lacking it
+    // Backfill fields for legacy records lacking them
     topics = topics.map((t: any) => ({
       ...t,
+      // ensure dailyNotes exists so adding a note doesn't throw
+      dailyNotes: t.dailyNotes || {},
+      // ensure xpFlags exists
       xpFlags: t.xpFlags || {},
     }));
     return {
@@ -180,6 +183,7 @@ class Store {
     const today = formatISO(new Date(), { representation: "date" });
     const topic = this.state.topics.find((t) => t.id === id);
     if (!topic) return;
+    if (!topic.dailyNotes) topic.dailyNotes = {} as any;
     topic.dailyNotes[today] = note;
     topic.lastTouched = today;
     this.touchActivity();

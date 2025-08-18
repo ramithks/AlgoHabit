@@ -15,11 +15,9 @@ import { contextualMotivation } from "./motivationEngine";
 import {
   Timeline,
   WeekBoard,
-  LevelBadge,
   NotificationPanel,
-  StreakBadge,
-  ProgressBar,
   AuthScreen,
+  StatusCluster,
 } from "./components";
 import { FocusClock } from "./components/FocusClock";
 
@@ -253,48 +251,40 @@ export const App: React.FC = () => {
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}
             / {TOTAL_WEEKS}
           </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap">
-            <button
-              onClick={() => navigate("/settings")}
-              className="btn btn-ghost text-[10px]"
-            >
-              Settings
-            </button>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-nowrap whitespace-nowrap overflow-x-auto">
+            <StatusCluster
+              overallPct={overall.pct}
+              streak={data.streak}
+              level={lvlDetails.level}
+              xp={lvlDetails.totalXP}
+            />
+            {xpDelta && (
+              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s]">
+                +{xpDelta} XP
+              </span>
+            )}
             <button
               onClick={() => {
                 setFocusMode((f) => !f);
                 setAutoFocusApplied(false);
               }}
-              className={`btn text-[10px] ${
-                focusMode
-                  ? "btn-primary !px-3 !py-1.5"
-                  : "btn-ghost !px-3 !py-1.5"
-              }`}
+              className={`btn ${
+                focusMode ? "btn-primary" : "btn-ghost"
+              } text-[11px] !px-3 !py-1.5`}
             >
-              {focusMode ? "Exit Focus" : "Focus Mode"}
+              {focusMode ? "Exit" : "Focus"}
             </button>
-            <StreakBadge streak={data.streak} />
-            <ProgressBar pct={overall.pct} />
-            <div className="relative">
-              <LevelBadge
-                level={lvlDetails.level}
-                xpInto={lvlDetails.xpInto}
-                xpFor={lvlDetails.xpForLevel}
-                pct={lvlDetails.pct}
-                totalXP={lvlDetails.totalXP}
-                pulse={levelPulse}
-              />
-              {xpDelta && (
-                <span className="absolute -right-1 -top-2 text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s]">
-                  +{xpDelta} XP
-                </span>
-              )}
-            </div>
             <button
               onClick={() => setShowPalette(true)}
-              className="btn-ghost btn text-[11px] !px-2 !py-1"
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
             >
               ⌘K
+            </button>
+            <button
+              onClick={() => navigate("/settings")}
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+            >
+              Settings
             </button>
           </div>
         </div>

@@ -214,27 +214,30 @@ const NoteInput: React.FC<{
   onChange: (v: string) => void;
   onCommit: (v: string) => void;
 }> = ({ value, onChange, onCommit }) => {
-  const [pending, setPending] = useState(false);
-  React.useEffect(() => {
-    if (value === "") return; // don't auto-save empty
-    setPending(true);
-    const id = setTimeout(() => {
-      onCommit(value);
-      setPending(false);
-    }, 500);
-    return () => clearTimeout(id);
+  const [saved, setSaved] = useState(false);
+  const commit = React.useCallback(() => {
+    const v = value?.trim() ?? "";
+    if (v.length === 0) return;
+    onCommit(v);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 800);
   }, [value, onCommit]);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
         placeholder="Daily note / reflection"
         className="bg-gray-800 text-[11px] px-2 py-1 rounded outline-none flex-1 min-w-0 focus:ring-1 focus:ring-accent focus:bg-gray-750 transition border border-gray-700/60"
       />
-      {pending && (
-        <span className="text-[10px] text-gray-500 animate-pulse">…</span>
-      )}
+      {saved && <span className="text-[10px] text-emerald-400">Saved</span>}
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { hydrateActivityDays, subscribeActivity } from "./activity";
 import { hasProfile } from "./repos/profilesRepo";
 import { listTopicProgress, upsertTopicProgress } from "./repos/topicsRepo";
 import { getMetrics, upsertMetrics } from "./repos/metricsRepo";
+import { listNotes, upsertNotes } from "./repos/notesRepo";
 
 // Tables we will use in Supabase (you need to create these):
 // - profiles: { id text, email text, created_at timestamptz }
@@ -64,7 +65,21 @@ export async function pullAll() {
     });
     store.hydrate(next as any);
   }
-  // Daily tasks removed
+  // Pull daily notes and merge into local
+  const notes = await listNotes(userId);
+  if (notes && notes.length) {
+    const next = store.serialize();
+    next.topics = next.topics.map((t) => {
+      const rows = notes.filter((r) => r.topic_id === t.id);
+      if (!rows.length) return t;
+      const dn = { ...(t as any).dailyNotes } as Record<string, string>;
+      for (const r of rows) {
+        dn[r.day] = r.note;
+      }
+      return { ...t, dailyNotes: dn } as any;
+    });
+    store.hydrate(next as any);
+  }
   // Pull activity days
   const a = await getActivityDays(userId);
   if (a) hydrateActivityDays(a);
@@ -76,6 +91,16 @@ export async function pushAll() {
   const state = store.serialize();
   await upsertTopicProgress(userId, state.topics as any);
   await upsertMetrics(userId, state.xp, state.streak, state.lastActive);
+  // Push daily notes
+  const noteRows = state.topics.flatMap((t) => {
+    return Object.entries(t.dailyNotes || {}).map(([day, note]) => ({
+      user_id: userId,
+      topic_id: t.id,
+      day,
+      note,
+    }));
+  });
+  if (noteRows.length) await upsertNotes(noteRows as any);
 }
 
 export function startAutoSync(intervalMs = 15000) {
