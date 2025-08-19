@@ -102,6 +102,9 @@ export const App: React.FC = () => {
     const v = localStorage.getItem("dsa-pref-sfx");
     return v === null ? true : v === "1";
   });
+  const [prefHighContrast, setPrefHighContrast] = useState(
+    () => localStorage.getItem("dsa-pref-high-contrast") === "1"
+  );
   const [activityDays, setActivityDays] = useState<string[]>(() =>
     getActivityDays()
   );
@@ -135,6 +138,13 @@ export const App: React.FC = () => {
   useEffect(() => {
     sfx.setEnabled(prefSfx);
   }, [prefSfx]);
+
+  // Apply high-contrast UI theme
+  useEffect(() => {
+    const root = document.documentElement;
+    if (prefHighContrast) root.classList.add("high-contrast");
+    else root.classList.remove("high-contrast");
+  }, [prefHighContrast]);
 
   useEffect(() => {
     const unsub = store.subscribe((s) =>
@@ -477,6 +487,7 @@ export const App: React.FC = () => {
           <SettingsPanelLazy
             onClose={() => navigate("/app")}
             userEmail={authUser?.email || null}
+            userId={authUser?.id || null}
             onReset={() => resetCurrentUserData()}
             onLogout={() => {
               logout();
@@ -484,6 +495,11 @@ export const App: React.FC = () => {
               setFocusMode(false);
               setAutoFocusApplied(false);
               navigate("/auth", { replace: true });
+            }}
+            onSyncNow={() => {
+              try {
+                pullAll();
+              } catch {}
             }}
             prefFocusDefault={prefFocusDefault}
             onToggleFocusDefault={() => {
@@ -514,6 +530,12 @@ export const App: React.FC = () => {
             }}
             prefSfx={prefSfx}
             onToggleSfx={() => setPrefSfx((v) => !v)}
+            prefHighContrast={prefHighContrast}
+            onToggleHighContrast={() => {
+              const v = !prefHighContrast;
+              setPrefHighContrast(v);
+              localStorage.setItem("dsa-pref-high-contrast", v ? "1" : "0");
+            }}
             statsSummary={{
               complete: weekStats.complete,
               total: weekStats.total,
