@@ -1,4 +1,11 @@
 import React from "react";
+import {
+  updateProfile,
+  randomUsername,
+  getProfileById,
+  getProfileByUsername,
+} from "../repos/profilesRepo";
+import { supabase } from "../../lib/supabaseClient";
 
 type TabKey = "general" | "preferences" | "data" | "about";
 
@@ -39,9 +46,207 @@ export const SettingsPanel: React.FC<{
   onToggleHighContrast,
   statsSummary,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  // Trap focus within the modal
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const focusable = () =>
+      Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'a,button,input,textarea,select,[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((n) => !n.hasAttribute("disabled"));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const nodes = focusable();
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !el.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    el.addEventListener("keydown", onKey as any);
+    const timer = setTimeout(() => {
+      const nodes = focusable();
+      nodes[0]?.focus();
+    }, 0);
+    return () => {
+      el.removeEventListener("keydown", onKey as any);
+      clearTimeout(timer);
+    };
+  }, []);
   const [confirming, setConfirming] = React.useState(false);
   const [tab, setTab] = React.useState<TabKey>("general");
   const [resetText, setResetText] = React.useState("");
+  const [fullName, setFullName] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [isPublic, setIsPublic] = React.useState(false);
+  const [usernameAvailable, setUsernameAvailable] = React.useState<
+    null | boolean
+  >(null);
+  const [checkingUsername, setCheckingUsername] = React.useState(false);
+  const [justSaved, setJustSaved] = React.useState(false);
+  const [copiedUrl, setCopiedUrl] = React.useState(false);
+  const [showPublicConfirm, setShowPublicConfirm] = React.useState(false);
+  const [emailVerified, setEmailVerified] = React.useState<boolean>(true);
+  const [verifyHint, setVerifyHint] = React.useState<string>("");
+  const [savingPublic, setSavingPublic] = React.useState(false);
+  const [resendState, setResendState] = React.useState<
+    "idle" | "sending" | "sent" | "error"
+  >("idle");
+  const [publicError, setPublicError] = React.useState<string>("");
+  const reservedUsernames = React.useMemo(
+    () =>
+      new Set([
+        "me",
+        "auth",
+        "login",
+        "signup",
+        "settings",
+        "u",
+        "app",
+        "admin",
+      ]),
+    []
+  );
+  const persistPublic = React.useCallback(
+    async (newVal: boolean) => {
+      if (!userId) return;
+      setPublicError("");
+      if (newVal) {
+        // Validations before enabling
+        if (!emailVerified) {
+          setVerifyHint("Verify your email before enabling public profile.");
+          setShowPublicConfirm(true);
+          return;
+        }
+        if (
+          !username ||
+          reservedUsernames.has(username) ||
+          usernameAvailable === false ||
+          checkingUsername
+        ) {
+          setShowPublicConfirm(true);
+          return;
+        }
+      }
+      setSavingPublic(true);
+      const { ok, error } = await updateProfile(userId, {
+        full_name: fullName || null,
+        username: username || null,
+        is_public: newVal,
+      });
+      setSavingPublic(false);
+      if (ok) {
+        setIsPublic(newVal);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 1400);
+      } else if (error) {
+        setPublicError(error.message || "Failed to update profile");
+      }
+      try {
+        const el = document.createElement("div");
+        el.className =
+          "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+        el.textContent = ok
+          ? newVal
+            ? "Public profile enabled"
+            : "Public profile disabled"
+          : "Update failed";
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1400);
+      } catch {}
+    },
+    [
+      userId,
+      emailVerified,
+      username,
+      reservedUsernames,
+      usernameAvailable,
+      checkingUsername,
+      fullName,
+    ]
+  );
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!userId) return;
+      const p = await getProfileById(userId);
+      if (!mounted || !p) return;
+      setFullName(p.full_name || "");
+      setUsername((p.username || "").toLowerCase());
+      setIsPublic(!!p.is_public);
+      setPublicError("");
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [userId]);
+  // Check email verification status
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!active) return;
+        const verified = !!data.user?.email_confirmed_at;
+        setEmailVerified(verified);
+        if (!verified)
+          setVerifyHint("Verify your email to enable public profile.");
+        else setVerifyHint("");
+      } catch {
+        // default to true to avoid blocking in case of transient errors
+        setEmailVerified(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  // Check username availability (debounced)
+  React.useEffect(() => {
+    let active = true;
+    const name = username.trim();
+    if (!name) {
+      setUsernameAvailable(null);
+      setCheckingUsername(false);
+      return;
+    }
+    if (reservedUsernames.has(name)) {
+      setUsernameAvailable(false);
+      setCheckingUsername(false);
+      return;
+    }
+    setCheckingUsername(true);
+    const t = setTimeout(async () => {
+      try {
+        const found = await getProfileByUsername(name);
+        if (!active) return;
+        const ok =
+          !found || (userId && (found as any).id === userId) ? true : false;
+        setUsernameAvailable(!!ok);
+      } catch {
+        // ignore
+      } finally {
+        if (active) setCheckingUsername(false);
+      }
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [username, userId, reservedUsernames]);
   const tz = React.useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "",
     []
@@ -72,6 +277,7 @@ export const SettingsPanel: React.FC<{
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
@@ -212,6 +418,266 @@ export const SettingsPanel: React.FC<{
                       <span className="text-gray-200">
                         {statsSummary.streak} days
                       </span>
+                    </div>
+                  </div>
+                </div>
+                {!emailVerified && _userEmail && (
+                  <div
+                    className="mt-2 text-[11px] flex items-center justify-between gap-2 rounded border border-amber-500/30 bg-amber-500/10 text-amber-200 px-2 py-1.5"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="truncate">
+                      Email not verified. Check your inbox or resend.
+                    </span>
+                    <button
+                      disabled={resendState === "sending"}
+                      onClick={async () => {
+                        if (!_userEmail) return;
+                        setResendState("sending");
+                        try {
+                          const { error } = await supabase.auth.resend({
+                            type: "signup",
+                            email: _userEmail,
+                          } as any);
+                          if (error) throw error;
+                          setResendState("sent");
+                          setTimeout(() => setResendState("idle"), 3000);
+                        } catch {
+                          setResendState("error");
+                          setTimeout(() => setResendState("idle"), 3000);
+                        }
+                      }}
+                      className={`shrink-0 px-2 py-1 rounded border ${
+                        resendState === "sending"
+                          ? "bg-gray-700/60 text-gray-400 border-gray-600 cursor-not-allowed"
+                          : "bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border-amber-500/30"
+                      }`}
+                    >
+                      {resendState === "sending"
+                        ? "Sending…"
+                        : resendState === "sent"
+                        ? "Sent"
+                        : "Resend"}
+                    </button>
+                  </div>
+                )}
+                {/* Share Profile */}
+                <div className="bg-gray-800/40 rounded p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-gray-200 text-sm font-medium">
+                        Share profile
+                      </div>
+                      <div className="text-[11px] text-gray-500">
+                        Create a public page to share your progress.
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!isPublic) setShowPublicConfirm(true);
+                        else void persistPublic(false);
+                      }}
+                      aria-pressed={isPublic}
+                      className={`text-[11px] px-2 py-1 rounded border ${
+                        isPublic
+                          ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border-emerald-500/30"
+                          : "bg-gray-700/60 text-gray-300 hover:bg-gray-700 border-gray-600"
+                      }`}
+                      title={
+                        isPublic
+                          ? "Disable Public Profile"
+                          : "Enable Public Profile"
+                      }
+                    >
+                      {isPublic
+                        ? "Disable Public Profile"
+                        : "Enable Public Profile"}
+                    </button>
+                    {!isPublic && !emailVerified && (
+                      <span
+                        className="ml-2 text-[10px] text-amber-400"
+                        aria-live="polite"
+                      >
+                        {verifyHint || "Verify email to enable"}
+                      </span>
+                    )}
+                  </div>
+                  {publicError && (
+                    <div
+                      className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded p-2"
+                      role="alert"
+                    >
+                      {publicError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                    <div>
+                      <div className="text-gray-400 mb-1">Full name</div>
+                      <input
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="Jane Doe"
+                        className="w-full text-[12px] px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700 outline-none focus:ring-1 focus:ring-accent"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-gray-400">Username</span>
+                      </div>
+                      <div className="flex">
+                        <span className="px-2 py-2 text-[12px] rounded-l bg-gray-800 border border-r-0 border-gray-700 text-gray-400">
+                          /u/
+                        </span>
+                        <input
+                          value={username}
+                          onChange={(e) =>
+                            setUsername(
+                              e.target.value
+                                .toLowerCase()
+                                .replace(/[^a-z0-9-_]/g, "")
+                            )
+                          }
+                          placeholder="swift-coder-23"
+                          className="w-full text-[12px] px-3 py-2 rounded-r bg-gray-800 text-gray-200 border border-gray-700 outline-none focus:ring-1 focus:ring-accent"
+                        />
+                      </div>
+                      <div className="min-h-[16px] mt-1 text-[10px]">
+                        {username && reservedUsernames.has(username) && (
+                          <span className="text-amber-400">Reserved name</span>
+                        )}
+                        {username &&
+                          !reservedUsernames.has(username) &&
+                          checkingUsername && (
+                            <span className="text-gray-500">Checking…</span>
+                          )}
+                        {username &&
+                          !reservedUsernames.has(username) &&
+                          usernameAvailable === true &&
+                          !checkingUsername && (
+                            <span className="text-emerald-400">Available</span>
+                          )}
+                        {username &&
+                          !reservedUsernames.has(username) &&
+                          usernameAvailable === false &&
+                          !checkingUsername && (
+                            <span className="text-rose-400">Taken</span>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] text-gray-500 truncate flex items-center gap-2 min-w-0">
+                      {isPublic && username ? (
+                        <>
+                          <a
+                            className="text-accent hover:underline truncate"
+                            href={`${location.origin}${
+                              import.meta.env.BASE_URL || "/"
+                            }u/${username}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`${location.origin}${
+                              import.meta.env.BASE_URL || "/"
+                            }u/${username}`}
+                          >
+                            {location.origin}
+                            {import.meta.env.BASE_URL || "/"}
+                            u/{username}
+                          </a>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const url = `${location.origin}${
+                                  import.meta.env.BASE_URL || "/"
+                                }u/${username}`;
+                                await navigator.clipboard.writeText(url);
+                                setCopiedUrl(true);
+                                setTimeout(() => setCopiedUrl(false), 1000);
+                              } catch {}
+                            }}
+                            className="shrink-0 px-2 py-1 rounded bg-gray-800/60 hover:bg-gray-800 border border-gray-700 text-gray-300"
+                            aria-live="polite"
+                            aria-label={
+                              copiedUrl ? "Link copied" : "Copy profile link"
+                            }
+                          >
+                            {copiedUrl ? "Copied" : "Copy"}
+                          </button>
+                        </>
+                      ) : (
+                        <span>Public page URL will appear here</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {justSaved && (
+                        <span
+                          className="text-[10px] text-emerald-400"
+                          aria-live="polite"
+                        >
+                          Saved
+                        </span>
+                      )}
+                      <button
+                        disabled={
+                          isPublic &&
+                          (!username ||
+                            reservedUsernames.has(username) ||
+                            usernameAvailable === false ||
+                            checkingUsername ||
+                            !emailVerified)
+                        }
+                        onClick={async () => {
+                          if (!userId) return;
+                          if (isPublic && !emailVerified) {
+                            setVerifyHint(
+                              "Verify your email before enabling public profile."
+                            );
+                            try {
+                              const el = document.createElement("div");
+                              el.className =
+                                "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-amber-200 ring-1 ring-amber-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.8s]";
+                              el.textContent =
+                                "Email verification required to make profile public";
+                              document.body.appendChild(el);
+                              setTimeout(() => el.remove(), 1800);
+                            } catch {}
+                            return;
+                          }
+                          const { ok, error } = await updateProfile(userId, {
+                            full_name: fullName || null,
+                            username: username || null,
+                            is_public: isPublic,
+                          });
+                          if (ok) {
+                            setJustSaved(true);
+                            setTimeout(() => setJustSaved(false), 1400);
+                          } else if (error) {
+                            setPublicError(error.message || "Update failed");
+                          }
+                          try {
+                            const el = document.createElement("div");
+                            el.className =
+                              "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                            el.textContent = ok
+                              ? "Profile updated"
+                              : "Update failed";
+                            document.body.appendChild(el);
+                            setTimeout(() => el.remove(), 1400);
+                          } catch {}
+                        }}
+                        className={`text-[11px] px-3 py-1.5 rounded border ${
+                          isPublic &&
+                          (!username ||
+                            reservedUsernames.has(username) ||
+                            usernameAvailable === false ||
+                            checkingUsername)
+                            ? "bg-gray-700/60 text-gray-400 border-gray-600 cursor-not-allowed"
+                            : "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border-blue-500/30"
+                        }`}
+                      >
+                        Save
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -501,6 +967,79 @@ export const SettingsPanel: React.FC<{
                   className="flex-1 text-[11px] px-3 py-2 rounded bg-gray-700/60 text-gray-200 hover:bg-gray-700"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enable Public confirm */}
+        {showPublicConfirm && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="w-[420px] bg-gray-900 rounded-xl ring-1 ring-gray-700 p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-200">
+                Enable Public Profile
+              </h3>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Your streak and XP will be visible to anyone with your link. You
+                can disable this anytime from Settings.
+              </p>
+              {(!username ||
+                reservedUsernames.has(username) ||
+                usernameAvailable === false ||
+                checkingUsername) && (
+                <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded p-2">
+                  Set a valid, available username before enabling.
+                </div>
+              )}
+              {!emailVerified && (
+                <div
+                  className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-2"
+                  aria-live="polite"
+                >
+                  {verifyHint || "Verify your email to proceed."}
+                </div>
+              )}
+              {publicError && (
+                <div
+                  className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded p-2"
+                  role="alert"
+                >
+                  {publicError}
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPublicConfirm(false)}
+                  className="flex-1 text-[11px] px-3 py-2 rounded bg-gray-700/60 text-gray-200 hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={
+                    !emailVerified ||
+                    !username ||
+                    reservedUsernames.has(username) ||
+                    usernameAvailable === false ||
+                    checkingUsername ||
+                    savingPublic
+                  }
+                  onClick={async () => {
+                    await persistPublic(true);
+                    setShowPublicConfirm(false);
+                  }}
+                  className={`flex-1 text-[11px] px-3 py-2 rounded ${
+                    !emailVerified ||
+                    !username ||
+                    reservedUsernames.has(username) ||
+                    usernameAvailable === false ||
+                    checkingUsername ||
+                    savingPublic
+                      ? "bg-gray-700/60 text-gray-400 cursor-not-allowed"
+                      : "bg-emerald-500/30 text-emerald-100 hover:bg-emerald-500/40"
+                  }`}
+                >
+                  {savingPublic ? "Enabling…" : "Enable"}
                 </button>
               </div>
             </div>

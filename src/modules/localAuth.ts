@@ -42,6 +42,7 @@ export async function signup(
   if (error) throw new Error(error.message);
   // If email confirmation is enabled, data.session will be null.
   if (!data.session) {
+    // Username will be auto-assigned on first login after confirmation.
     return { status: "confirmation_sent" as const };
   }
   const uid = data.session.user.id;
