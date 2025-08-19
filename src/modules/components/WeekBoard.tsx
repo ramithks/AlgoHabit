@@ -214,13 +214,11 @@ const NoteInput: React.FC<{
   onChange: (v: string) => void;
   onCommit: (v: string) => void;
 }> = ({ value, onChange, onCommit }) => {
-  const [saved, setSaved] = useState(false);
+  // Visual save indicators removed for a cleaner UI
   const commit = React.useCallback(() => {
     const v = value?.trim() ?? "";
     if (v.length === 0) return;
     onCommit(v);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 800);
   }, [value, onCommit]);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
@@ -237,7 +235,6 @@ const NoteInput: React.FC<{
         placeholder="Daily note / reflection"
         className="bg-gray-800 text-[11px] px-2 py-1 rounded outline-none flex-1 min-w-0 focus:ring-1 focus:ring-accent focus:bg-gray-750 transition border border-gray-700/60"
       />
-      {saved && <span className="text-[10px] text-emerald-400">Saved</span>}
     </div>
   );
 };

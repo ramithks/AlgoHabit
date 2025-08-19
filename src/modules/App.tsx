@@ -251,13 +251,15 @@ export const App: React.FC = () => {
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}
             / {TOTAL_WEEKS}
           </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-nowrap whitespace-nowrap overflow-x-auto">
-            <StatusCluster
-              overallPct={overall.pct}
-              streak={data.streak}
-              level={lvlDetails.level}
-              xp={lvlDetails.totalXP}
-            />
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
+            <div className="basis-full sm:basis-auto">
+              <StatusCluster
+                overallPct={overall.pct}
+                streak={data.streak}
+                level={lvlDetails.level}
+                xp={lvlDetails.totalXP}
+              />
+            </div>
             {xpDelta && (
               <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s]">
                 +{xpDelta} XP
@@ -270,19 +272,19 @@ export const App: React.FC = () => {
               }}
               className={`btn ${
                 focusMode ? "btn-primary" : "btn-ghost"
-              } text-[11px] !px-3 !py-1.5`}
+              } text-[11px] !px-3 !py-1.5 sm:text-[11px] sm:!px-3 sm:!py-1.5`}
             >
               {focusMode ? "Exit" : "Focus"}
             </button>
             <button
               onClick={() => setShowPalette(true)}
-              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex"
             >
               ⌘K
             </button>
             <button
               onClick={() => navigate("/settings")}
-              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex"
             >
               Settings
             </button>
@@ -311,9 +313,15 @@ export const App: React.FC = () => {
             week={activeWeek}
             topics={data.topics}
             onStatusChange={(id: string, status: TopicStatus) => {
+              const prev = data.topics.find((t) => t.id === id)?.status;
               store.setStatus(id, status);
               recordActivity();
               setActivityDays(getActivityDays());
+              if (status === "complete" && prev !== "complete") {
+                // trigger a quick confetti pulse via achievement toast
+                setRecentAchievement("topic-complete");
+                setTimeout(() => setRecentAchievement(null), 2000);
+              }
             }}
             onAddNote={(id: string, note: string) => {
               store.addDailyNote(id, note);
@@ -569,10 +577,10 @@ const ConfettiTrigger: React.FC<{ active: boolean }> = ({ active }) => {
       c: ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"][
         Math.floor(Math.random() * 5)
       ],
-      vy: 2 + Math.random() * 3,
-      vx: -1 + Math.random() * 2,
+      vy: 3.5 + Math.random() * 4.5,
+      vx: -1.5 + Math.random() * 3,
       rot: Math.random() * Math.PI,
-      vr: -0.05 + Math.random() * 0.1,
+      vr: -0.08 + Math.random() * 0.16,
     }));
     let frame: number;
     const draw = () => {
@@ -595,7 +603,7 @@ const ConfettiTrigger: React.FC<{ active: boolean }> = ({ active }) => {
     const to = setTimeout(() => {
       cancelAnimationFrame(frame);
       canvas.remove();
-    }, 2500);
+    }, 1600);
     const onResize = () => {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
