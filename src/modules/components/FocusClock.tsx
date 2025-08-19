@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { sfx } from "../sfx";
 
 export const FocusClock: React.FC = () => {
   const workMinutes = 25;
@@ -44,10 +45,12 @@ export const FocusClock: React.FC = () => {
   function start() {
     setEndsAt(Date.now() + durationMs);
     setRunning(true);
+    sfx.play("start");
   }
   function stop() {
     setRunning(false);
     setEndsAt(null);
+    sfx.play("end");
   }
   function reset() {
     setRunning(false);

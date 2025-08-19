@@ -57,6 +57,7 @@ import { logout, getActiveUser } from "./localAuth";
 import { resetCurrentUserData } from "./state";
 import { recordActivity, getActivityDays } from "./activity";
 import { startAutoSync, pullAll } from "./cloudSync";
+import { sfx } from "./sfx";
 
 export const App: React.FC = () => {
   const navigate = useNavigate();
@@ -97,6 +98,9 @@ export const App: React.FC = () => {
   const [prefReducedMotion, setPrefReducedMotion] = useState(
     () => localStorage.getItem("dsa-pref-reduced-motion") === "1"
   );
+  const [prefSfx, setPrefSfx] = useState(
+    () => localStorage.getItem("dsa-pref-sfx") === "1"
+  );
   const [activityDays, setActivityDays] = useState<string[]>(() =>
     getActivityDays()
   );
@@ -128,6 +132,10 @@ export const App: React.FC = () => {
   }, [prefDisableConfetti]);
 
   useEffect(() => {
+    sfx.setEnabled(prefSfx);
+  }, [prefSfx]);
+
+  useEffect(() => {
     const unsub = store.subscribe((s) =>
       setData({
         topics: s.topics,
@@ -156,10 +164,21 @@ export const App: React.FC = () => {
       if (newLevel > prevLevel) {
         setLevelPulse(true);
         setTimeout(() => setLevelPulse(false), 2200);
+        sfx.play("levelUp");
       }
     }
     setLastXP(current);
   }, [data.xp, lastXP]);
+
+  // Streak milestone shimmer (7 and 30)
+  const [streakShimmer, setStreakShimmer] = useState(false);
+  useEffect(() => {
+    if (data.streak === 7 || data.streak === 30) {
+      setStreakShimmer(true);
+      const to = setTimeout(() => setStreakShimmer(false), 2000);
+      return () => clearTimeout(to);
+    }
+  }, [data.streak]);
 
   useEffect(() => {
     const id = setInterval(() => setQuote(randomQuote()), 180000); // rotate every 3 minutes
@@ -179,9 +198,11 @@ export const App: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setShowPalette(true);
+        sfx.play("open");
       }
       if (e.key === "Escape") {
         setShowPalette(false);
+        sfx.play("close");
       }
     }
     window.addEventListener("keydown", handler);
@@ -251,7 +272,7 @@ export const App: React.FC = () => {
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}
             / {TOTAL_WEEKS}
           </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto relative">
             <div className="basis-full sm:basis-auto">
               <StatusCluster
                 overallPct={overall.pct}
@@ -261,7 +282,7 @@ export const App: React.FC = () => {
               />
             </div>
             {xpDelta && (
-              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s]">
+              <span className="absolute -top-2 right-2 text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s] pointer-events-none">
                 +{xpDelta} XP
               </span>
             )}
@@ -278,7 +299,9 @@ export const App: React.FC = () => {
             </button>
             <button
               onClick={() => setShowPalette(true)}
-              className="btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex"
+              className={`btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex ${
+                streakShimmer ? "animate-pulse" : ""
+              }`}
             >
               ⌘K
             </button>
@@ -389,11 +412,28 @@ export const App: React.FC = () => {
                 "Start your planned session now."
               );
               setReminders(listReminders());
+              // toast
+              try {
+                const el = document.createElement("div");
+                el.className =
+                  "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                el.textContent = "Reminder scheduled";
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1600);
+              } catch {}
               return id;
             }}
             onCancel={(id: string) => {
               cancelReminder(id);
               setReminders(listReminders());
+              try {
+                const el = document.createElement("div");
+                el.className =
+                  "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                el.textContent = "Reminder canceled";
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1600);
+              } catch {}
             }}
             remMinutes={remMinutes}
             onChangeMinutes={setRemMinutes}
@@ -417,7 +457,7 @@ export const App: React.FC = () => {
           />
         </Suspense>
       )}
-      {recentAchievement && <AchievementToast id={recentAchievement} />}
+      {recentAchievement ? <AchievementToast id={recentAchievement} /> : null}
       <ConfettiTrigger
         active={
           !!recentAchievement && !prefDisableConfetti && !prefReducedMotion
@@ -463,6 +503,8 @@ export const App: React.FC = () => {
               localStorage.setItem("dsa-pref-reduced-motion", v ? "1" : "0");
               if (v) setRecentAchievement(null);
             }}
+            prefSfx={prefSfx}
+            onToggleSfx={() => setPrefSfx((v) => !v)}
             statsSummary={{
               complete: weekStats.complete,
               total: weekStats.total,

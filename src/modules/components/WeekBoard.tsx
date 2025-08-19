@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { TopicProgress, TopicStatus } from "../plan";
+import { sfx } from "../sfx";
 
 interface Props {
   week: number;
@@ -32,20 +33,18 @@ export const WeekBoard: React.FC<Props> = ({
     return weekTopicsRaw.filter((t) => t.status !== "complete");
   }, [weekTopicsRaw, filter]);
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
-
-  function playClick() {
-    const audio = new Audio(
-      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
-    ); // tiny silent click placeholder
-    audio.volume = 0.4;
-    audio.play().catch(() => {});
-  }
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   function cycleStatus(t: TopicProgress) {
     const idx = STATUS_ORDER.indexOf(t.status);
     const next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
-    playClick();
+    sfx.play("click");
     onStatusChange(t.id, next);
+    if (next === "complete") {
+      sfx.play("complete");
+      setFlashId(t.id);
+      setTimeout(() => setFlashId(null), 800);
+    }
   }
 
   const total = weekTopicsRaw.length;
@@ -103,7 +102,11 @@ export const WeekBoard: React.FC<Props> = ({
         {weekTopics.map((t) => (
           <li
             key={t.id}
-            className="flex flex-col gap-1 rounded border border-gray-800 hover:border-gray-700 transition p-3 bg-gray-950/50 focus-within:ring-1 focus-within:ring-accent/30 backdrop-blur-sm"
+            className={`flex flex-col gap-1 rounded border transition p-3 bg-gray-950/50 focus-within:ring-1 focus-within:ring-accent/30 backdrop-blur-sm ${
+              flashId === t.id
+                ? "border-emerald-500/60 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]"
+                : "border-gray-800 hover:border-gray-700"
+            }`}
           >
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
@@ -214,11 +217,14 @@ const NoteInput: React.FC<{
   onChange: (v: string) => void;
   onCommit: (v: string) => void;
 }> = ({ value, onChange, onCommit }) => {
-  // Visual save indicators removed for a cleaner UI
+  const [justSaved, setJustSaved] = useState(false);
   const commit = React.useCallback(() => {
     const v = value?.trim() ?? "";
     if (v.length === 0) return;
     onCommit(v);
+    setJustSaved(true);
+    sfx.play("save");
+    setTimeout(() => setJustSaved(false), 600);
   }, [value, onCommit]);
   return (
     <div className="flex items-center gap-2 min-w-0 w-full">
@@ -233,7 +239,11 @@ const NoteInput: React.FC<{
           }
         }}
         placeholder="Daily note / reflection"
-        className="bg-gray-800 text-[11px] px-2 py-1 rounded outline-none flex-1 min-w-0 focus:ring-1 focus:ring-accent focus:bg-gray-750 transition border border-gray-700/60"
+        className={`bg-gray-800 text-[11px] px-2 py-1 rounded outline-none flex-1 min-w-0 transition border border-gray-700/60 ${
+          justSaved
+            ? "ring-2 ring-emerald-400"
+            : "focus:ring-1 focus:ring-accent focus:bg-gray-750"
+        }`}
       />
     </div>
   );

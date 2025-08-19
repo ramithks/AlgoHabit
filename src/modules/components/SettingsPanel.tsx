@@ -11,6 +11,8 @@ export const SettingsPanel: React.FC<{
   onToggleDisableConfetti: () => void;
   prefReducedMotion: boolean;
   onToggleReducedMotion: () => void;
+  prefSfx?: boolean;
+  onToggleSfx?: () => void;
   statsSummary: { complete: number; total: number; streak: number; xp: number };
 }> = ({
   onClose,
@@ -23,6 +25,8 @@ export const SettingsPanel: React.FC<{
   onToggleDisableConfetti,
   prefReducedMotion,
   onToggleReducedMotion,
+  prefSfx,
+  onToggleSfx,
   statsSummary,
 }) => {
   const [confirming, setConfirming] = React.useState(false);
@@ -96,6 +100,13 @@ export const SettingsPanel: React.FC<{
                 enabled={prefReducedMotion}
                 onToggle={onToggleReducedMotion}
               />
+              {onToggleSfx && (
+                <ToggleRow
+                  label="Sound Effects"
+                  enabled={!!prefSfx}
+                  onToggle={onToggleSfx}
+                />
+              )}
             </div>
           </section>
           <section className="space-y-2">
