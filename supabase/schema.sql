@@ -12,16 +12,86 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique,
+  username text unique,
+  full_name text,
+  is_public boolean not null default false,
+  username_changed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+-- Optional: unique index on lower(username) to enforce case-insensitive uniqueness
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes where schemaname = 'public' and indexname = 'profiles_username_lower_unique'
+  ) then
+    execute 'create unique index profiles_username_lower_unique on public.profiles (lower(username))';
+  end if;
+end $$;
+
 -- Keep profiles.email in sync with auth.users.email via triggers
+-- Helper: reserved usernames
+create or replace function public.is_reserved_username(name text)
+returns boolean as $$
+begin
+  if name is null then return false; end if;
+  return lower(name) in (
+    'me','auth','login','signup','settings','u','app','admin'
+  );
+end;
+$$ language plpgsql immutable set search_path = public;
+
+-- Helper: verified email check (SECURITY DEFINER to safely read auth.users)
+create or replace function public.is_email_verified(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select coalesce(u.email_confirmed_at is not null, false)
+  from auth.users u
+  where u.id = uid
+$$;
+
+revoke all on function public.is_email_verified(uuid) from public;
+grant execute on function public.is_email_verified(uuid) to authenticated;
+
+-- Helper: generate random username (ensures not reserved and unique)
+create or replace function public.generate_random_username()
+returns text as $$
+declare
+  adjs text[] := array['swift','brave','clever','calm','bright','bold','eager','keen'];
+  nouns text[] := array['coder','algo','byte','stack','graph','tree','array','heap'];
+  candidate text;
+  tries int := 0;
+begin
+  loop
+    tries := tries + 1;
+    candidate := lower(
+      adjs[1 + floor(random()*array_length(adjs,1))::int] || '-' ||
+      nouns[1 + floor(random()*array_length(nouns,1))::int] || '-' ||
+      lpad((floor(random()*999))::int::text, 2, '0')
+    );
+    if not public.is_reserved_username(candidate)
+       and not exists (select 1 from public.profiles p where lower(p.username) = lower(candidate)) then
+      return candidate;
+    end if;
+    if tries > 25 then
+      -- fallback to uuid slice
+      candidate := lower(replace(gen_random_uuid()::text,'-',''));
+      return left(candidate, 12);
+    end if;
+  end loop;
+end;
+$$ language plpgsql volatile set search_path = public;
+
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email)
-  values (new.id, new.email)
+  insert into public.profiles (id, email, username)
+  values (new.id, new.email, public.generate_random_username())
   on conflict (id) do update set email = excluded.email, updated_at = now();
   return new;
 end;
@@ -47,6 +117,65 @@ drop trigger if exists on_auth_user_email_updated on auth.users;
 create trigger on_auth_user_email_updated
   after update of email on auth.users
   for each row execute function public.handle_user_email_update();
+
+-- Username format constraint (lowercase letters, digits, dash, underscore; 3-30 chars)
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_username_format_chk'
+  ) then
+    alter table public.profiles
+      add constraint profiles_username_format_chk
+      check (
+        username is null or lower(username) ~ '^[a-z0-9_-]{3,30}$'
+      );
+  end if;
+end $$;
+
+-- Speed up public lookups
+create index if not exists idx_profiles_is_public on public.profiles(is_public);
+
+-- Username aliases keep old handles for redirects
+create table if not exists public.username_aliases (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  username text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, username)
+);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes where schemaname='public' and indexname='username_aliases_username_lower_unique'
+  ) then
+    execute 'create unique index username_aliases_username_lower_unique on public.username_aliases (lower(username))';
+  end if;
+end $$;
+
+alter table public.username_aliases enable row level security;
+
+-- Owner access
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='username_aliases' and policyname='username_aliases rw'
+  ) then
+    create policy "username_aliases rw" on public.username_aliases
+    for all using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) );
+  end if;
+end $$;
+
+-- Public read for aliases when profile is public
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='username_aliases' and policyname='username_aliases public read'
+  ) then
+    create policy "username_aliases public read" on public.username_aliases
+    for select using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) );
+  end if;
+end $$;
 
 -- User metrics (xp, streak, last_active)
 create table if not exists public.user_metrics (
@@ -125,6 +254,19 @@ begin
   end if;
 end $$;
 
+-- Public read-only access to profiles when is_public is true
+do $$
+begin
+  if exists (
+    select 1 from pg_policies where schemaname='public' and tablename='profiles' and policyname='profiles public read'
+  ) then
+  execute 'alter policy "profiles public read" on public.profiles using ( is_public = true )';
+  else
+    create policy "profiles public read" on public.profiles
+    for select using ( is_public = true );
+  end if;
+end $$;
+
 do $$
 begin
   if exists (
@@ -161,6 +303,19 @@ begin
   end if;
 end $$;
 
+-- Public read for metrics where the owning profile is public
+do $$
+begin
+  if exists (
+    select 1 from pg_policies where schemaname='public' and tablename='user_metrics' and policyname='metrics public read'
+  ) then
+  execute 'alter policy "metrics public read" on public.user_metrics using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) )';
+  else
+    create policy "metrics public read" on public.user_metrics
+    for select using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) );
+  end if;
+end $$;
+
 do $$
 begin
   if exists (
@@ -170,6 +325,19 @@ begin
   else
     create policy "topics_progress rw" on public.topics_progress
     for all using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) );
+  end if;
+end $$;
+
+-- Public read for topics where the owning profile is public
+do $$
+begin
+  if exists (
+    select 1 from pg_policies where schemaname='public' and tablename='topics_progress' and policyname='topics_progress public read'
+  ) then
+  execute 'alter policy "topics_progress public read" on public.topics_progress using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) )';
+  else
+    create policy "topics_progress public read" on public.topics_progress
+    for select using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) );
   end if;
 end $$;
 
@@ -185,6 +353,20 @@ begin
   end if;
 end $$;
 
+-- Optional: public read for notes if you want to show them on public profile (disabled by default)
+-- Uncomment to allow public read of notes
+-- do $$
+-- begin
+--   if exists (
+--     select 1 from pg_policies where schemaname='public' and tablename='topic_daily_notes' and policyname='topic_notes public read'
+--   ) then
+--   execute 'alter policy "topic_notes public read" on public.topic_daily_notes using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) )';
+--   else
+--     create policy "topic_notes public read" on public.topic_daily_notes
+--     for select using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) );
+--   end if;
+-- end $$;
+
 -- tasks policy removed
 
 do $$
@@ -199,6 +381,19 @@ begin
   end if;
 end $$;
 
+-- Public read for activity days when profile is public
+do $$
+begin
+  if exists (
+    select 1 from pg_policies where schemaname='public' and tablename='activity_log' and policyname='activity public read'
+  ) then
+  execute 'alter policy "activity public read" on public.activity_log using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) )';
+  else
+    create policy "activity public read" on public.activity_log
+    for select using ( exists (select 1 from public.profiles p where p.id = user_id and p.is_public = true) );
+  end if;
+end $$;
+
 -- Optional helper to keep updated_at current
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -208,6 +403,57 @@ begin
 end;
 $$ language plpgsql set search_path = public;
 
+-- Enforce username rules (reserved names, cooldown, and track change time)
+create or replace function public.enforce_username_rules()
+returns trigger as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.username is not null and public.is_reserved_username(new.username) then
+      raise exception 'Reserved username';
+    end if;
+    return new;
+  end if;
+  if tg_op = 'UPDATE' then
+    if new.username is distinct from old.username then
+      -- store old username as an alias for redirects
+      if old.username is not null then
+        begin
+          insert into public.username_aliases(user_id, username)
+          values (old.id, old.username)
+          on conflict do nothing;
+        exception when others then null;
+        end;
+      end if;
+      if new.username is null then
+        -- allow clearing (though app does not use it), do not set changed_at
+        return new;
+      end if;
+      if public.is_reserved_username(new.username) then
+        raise exception 'Reserved username';
+      end if;
+      -- enforce 7 day cooldown between username changes
+      if old.username_changed_at is not null and (now() - old.username_changed_at) < interval '7 days' then
+        raise exception 'Username can only be changed once every 7 days';
+      end if;
+      new.username_changed_at := now();
+    end if;
+    -- Only allow enabling public if email is verified
+    if new.is_public = true and (old.is_public is distinct from true) then
+      if not public.is_email_verified(new.id) then
+        raise exception 'Verify your email before enabling public profile';
+      end if;
+    end if;
+    return new;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+drop trigger if exists trg_enforce_username_rules on public.profiles;
+create trigger trg_enforce_username_rules
+before insert or update on public.profiles
+for each row execute function public.enforce_username_rules();
+
 do $$ begin
   perform 1;
   exception when others then null;
@@ -216,6 +462,15 @@ end $$;
 drop trigger if exists set_updated_at_profiles on public.profiles;
 create trigger set_updated_at_profiles before update on public.profiles
 for each row execute function public.set_updated_at();
+
+-- Backfill: assign usernames to existing profiles missing a username
+do $$
+begin
+  update public.profiles p
+  set username = public.generate_random_username()
+  where p.username is null;
+exception when others then null;
+end $$;
 
 drop trigger if exists set_updated_at_user_metrics on public.user_metrics;
 create trigger set_updated_at_user_metrics before update on public.user_metrics

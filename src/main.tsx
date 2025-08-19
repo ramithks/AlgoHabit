@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { App } from "./modules/App";
 import { AuthScreen } from "./modules/components";
+import { PublicProfilePage } from "./modules/public";
 import {
   BrowserRouter,
   Navigate,
@@ -44,6 +45,7 @@ const RootApp: React.FC = () => (
           </Protected>
         }
       />
+      <Route path="/u/:username" element={<PublicProfilePage />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   </BrowserRouter>

@@ -16,18 +16,27 @@ export interface Database {
         Row: {
           id: string; // uuid
           email: string | null;
+          username: string | null;
+          full_name: string | null;
+          is_public: boolean | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id: string;
           email?: string | null;
+          username?: string | null;
+          full_name?: string | null;
+          is_public?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           email?: string | null;
+          username?: string | null;
+          full_name?: string | null;
+          is_public?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -166,6 +175,32 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "activity_log_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      username_aliases: {
+        Row: {
+          user_id: string;
+          username: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          username: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          username?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "username_aliases_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";

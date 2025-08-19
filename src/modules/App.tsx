@@ -57,6 +57,7 @@ import { logout, getActiveUser } from "./localAuth";
 import { resetCurrentUserData } from "./state";
 import { recordActivity, getActivityDays } from "./activity";
 import { startAutoSync, pullAll } from "./cloudSync";
+import { sfx } from "./sfx";
 
 export const App: React.FC = () => {
   const navigate = useNavigate();
@@ -97,6 +98,13 @@ export const App: React.FC = () => {
   const [prefReducedMotion, setPrefReducedMotion] = useState(
     () => localStorage.getItem("dsa-pref-reduced-motion") === "1"
   );
+  const [prefSfx, setPrefSfx] = useState(() => {
+    const v = localStorage.getItem("dsa-pref-sfx");
+    return v === null ? true : v === "1";
+  });
+  const [prefHighContrast, setPrefHighContrast] = useState(
+    () => localStorage.getItem("dsa-pref-high-contrast") === "1"
+  );
   const [activityDays, setActivityDays] = useState<string[]>(() =>
     getActivityDays()
   );
@@ -128,6 +136,17 @@ export const App: React.FC = () => {
   }, [prefDisableConfetti]);
 
   useEffect(() => {
+    sfx.setEnabled(prefSfx);
+  }, [prefSfx]);
+
+  // Apply high-contrast UI theme
+  useEffect(() => {
+    const root = document.documentElement;
+    if (prefHighContrast) root.classList.add("high-contrast");
+    else root.classList.remove("high-contrast");
+  }, [prefHighContrast]);
+
+  useEffect(() => {
     const unsub = store.subscribe((s) =>
       setData({
         topics: s.topics,
@@ -156,10 +175,21 @@ export const App: React.FC = () => {
       if (newLevel > prevLevel) {
         setLevelPulse(true);
         setTimeout(() => setLevelPulse(false), 2200);
+        sfx.play("levelUp");
       }
     }
     setLastXP(current);
   }, [data.xp, lastXP]);
+
+  // Streak milestone shimmer (7 and 30)
+  const [streakShimmer, setStreakShimmer] = useState(false);
+  useEffect(() => {
+    if (data.streak === 7 || data.streak === 30) {
+      setStreakShimmer(true);
+      const to = setTimeout(() => setStreakShimmer(false), 2000);
+      return () => clearTimeout(to);
+    }
+  }, [data.streak]);
 
   useEffect(() => {
     const id = setInterval(() => setQuote(randomQuote()), 180000); // rotate every 3 minutes
@@ -170,6 +200,18 @@ export const App: React.FC = () => {
     ensureServiceWorker();
   }, []);
 
+  // Nudge audio context on first user interaction (browser autoplay policy)
+  useEffect(() => {
+    const fn = () => {
+      try {
+        sfx.setEnabled(prefSfx);
+      } catch {}
+      window.removeEventListener("pointerdown", fn);
+    };
+    window.addEventListener("pointerdown", fn);
+    return () => window.removeEventListener("pointerdown", fn);
+  }, [prefSfx]);
+
   // Daily tasks removed
 
   // initial focus state handled by the effect that watches prefFocusDefault
@@ -179,9 +221,11 @@ export const App: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setShowPalette(true);
+        sfx.play("open");
       }
       if (e.key === "Escape") {
         setShowPalette(false);
+        sfx.play("close");
       }
     }
     window.addEventListener("keydown", handler);
@@ -230,7 +274,7 @@ export const App: React.FC = () => {
   }, [achievements]);
 
   if (!authUser) {
-    return <AuthScreen onAuthed={(u) => setAuthUser(u)} />;
+    return <AuthScreen onAuthed={(u: any) => setAuthUser(u)} />;
   }
   return (
     <div
@@ -251,15 +295,17 @@ export const App: React.FC = () => {
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}
             / {TOTAL_WEEKS}
           </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-nowrap whitespace-nowrap overflow-x-auto">
-            <StatusCluster
-              overallPct={overall.pct}
-              streak={data.streak}
-              level={lvlDetails.level}
-              xp={lvlDetails.totalXP}
-            />
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto relative">
+            <div className="basis-full sm:basis-auto">
+              <StatusCluster
+                overallPct={overall.pct}
+                streak={data.streak}
+                level={lvlDetails.level}
+                xp={lvlDetails.totalXP}
+              />
+            </div>
             {xpDelta && (
-              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s]">
+              <span className="absolute -top-2 right-2 text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s] pointer-events-none">
                 +{xpDelta} XP
               </span>
             )}
@@ -270,19 +316,21 @@ export const App: React.FC = () => {
               }}
               className={`btn ${
                 focusMode ? "btn-primary" : "btn-ghost"
-              } text-[11px] !px-3 !py-1.5`}
+              } text-[11px] !px-3 !py-1.5 sm:text-[11px] sm:!px-3 sm:!py-1.5`}
             >
               {focusMode ? "Exit" : "Focus"}
             </button>
             <button
               onClick={() => setShowPalette(true)}
-              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+              className={`btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex ${
+                streakShimmer ? "animate-pulse" : ""
+              }`}
             >
               ⌘K
             </button>
             <button
               onClick={() => navigate("/settings")}
-              className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5 sm:inline-flex"
             >
               Settings
             </button>
@@ -291,16 +339,12 @@ export const App: React.FC = () => {
         <div className="h-0.5 w-full gradient-bar opacity-60" />
       </header>
       <main
-        className={`flex-1 grid gap-6 p-5 transition-all min-w-0 ${
-          focusMode
-            ? "grid-cols-1 place-items-center"
-            : "xl:grid-cols-[310px_1fr_340px] lg:grid-cols-[280px_1fr]"
-        }`}
+        className={`flex-1 grid gap-6 p-5 transition-all min-w-0 xl:grid-cols-[310px_1fr_340px] lg:grid-cols-[280px_1fr]`}
       >
         <div
-          className={`flex flex-col gap-6 ${
-            focusMode ? "hidden lg:block opacity-0 pointer-events-none" : ""
-          } transition min-w-0`}
+          className={`hidden lg:flex flex-col gap-6 transition min-w-0 ${
+            focusMode ? "lg:opacity-0 lg:pointer-events-none" : ""
+          }`}
         >
           <Timeline
             activeWeek={activeWeek}
@@ -311,9 +355,15 @@ export const App: React.FC = () => {
             week={activeWeek}
             topics={data.topics}
             onStatusChange={(id: string, status: TopicStatus) => {
+              const prev = data.topics.find((t) => t.id === id)?.status;
               store.setStatus(id, status);
               recordActivity();
               setActivityDays(getActivityDays());
+              if (status === "complete" && prev !== "complete") {
+                // trigger a quick confetti pulse via achievement toast
+                setRecentAchievement("topic-complete");
+                setTimeout(() => setRecentAchievement(null), 2000);
+              }
             }}
             onAddNote={(id: string, note: string) => {
               store.addDailyNote(id, note);
@@ -322,7 +372,7 @@ export const App: React.FC = () => {
             }}
           />
         </div>
-        <div className="flex flex-col gap-6 focus-core min-w-0 w-full max-w-3xl">
+        <div className="flex flex-col gap-6 focus-core min-w-0 w-full max-w-3xl mx-auto">
           <FocusClock />
           {!focusMode && (
             <div className="xl:hidden">
@@ -359,9 +409,9 @@ export const App: React.FC = () => {
           <ReviewSuggestions items={reviewSuggestions} />
         </div>
         <div
-          className={`hidden xl:flex flex-col gap-6 ${
-            focusMode ? "hidden" : ""
-          } transition min-w-0`}
+          className={`hidden xl:flex flex-col gap-6 transition min-w-0 ${
+            focusMode ? "xl:opacity-0 xl:pointer-events-none" : ""
+          }`}
         >
           <Suspense fallback={null}>
             <StreakHeatmapLazy days={activityDays} />
@@ -381,11 +431,28 @@ export const App: React.FC = () => {
                 "Start your planned session now."
               );
               setReminders(listReminders());
+              // toast
+              try {
+                const el = document.createElement("div");
+                el.className =
+                  "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                el.textContent = "Reminder scheduled";
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1600);
+              } catch {}
               return id;
             }}
             onCancel={(id: string) => {
               cancelReminder(id);
               setReminders(listReminders());
+              try {
+                const el = document.createElement("div");
+                el.className =
+                  "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                el.textContent = "Reminder canceled";
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1600);
+              } catch {}
             }}
             remMinutes={remMinutes}
             onChangeMinutes={setRemMinutes}
@@ -409,7 +476,7 @@ export const App: React.FC = () => {
           />
         </Suspense>
       )}
-      {recentAchievement && <AchievementToast id={recentAchievement} />}
+      {recentAchievement ? <AchievementToast id={recentAchievement} /> : null}
       <ConfettiTrigger
         active={
           !!recentAchievement && !prefDisableConfetti && !prefReducedMotion
@@ -420,6 +487,7 @@ export const App: React.FC = () => {
           <SettingsPanelLazy
             onClose={() => navigate("/app")}
             userEmail={authUser?.email || null}
+            userId={authUser?.id || null}
             onReset={() => resetCurrentUserData()}
             onLogout={() => {
               logout();
@@ -427,6 +495,11 @@ export const App: React.FC = () => {
               setFocusMode(false);
               setAutoFocusApplied(false);
               navigate("/auth", { replace: true });
+            }}
+            onSyncNow={() => {
+              try {
+                pullAll();
+              } catch {}
             }}
             prefFocusDefault={prefFocusDefault}
             onToggleFocusDefault={() => {
@@ -454,6 +527,14 @@ export const App: React.FC = () => {
               setPrefReducedMotion(v);
               localStorage.setItem("dsa-pref-reduced-motion", v ? "1" : "0");
               if (v) setRecentAchievement(null);
+            }}
+            prefSfx={prefSfx}
+            onToggleSfx={() => setPrefSfx((v) => !v)}
+            prefHighContrast={prefHighContrast}
+            onToggleHighContrast={() => {
+              const v = !prefHighContrast;
+              setPrefHighContrast(v);
+              localStorage.setItem("dsa-pref-high-contrast", v ? "1" : "0");
             }}
             statsSummary={{
               complete: weekStats.complete,
@@ -569,10 +650,10 @@ const ConfettiTrigger: React.FC<{ active: boolean }> = ({ active }) => {
       c: ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"][
         Math.floor(Math.random() * 5)
       ],
-      vy: 2 + Math.random() * 3,
-      vx: -1 + Math.random() * 2,
+      vy: 3.5 + Math.random() * 4.5,
+      vx: -1.5 + Math.random() * 3,
       rot: Math.random() * Math.PI,
-      vr: -0.05 + Math.random() * 0.1,
+      vr: -0.08 + Math.random() * 0.16,
     }));
     let frame: number;
     const draw = () => {
@@ -595,7 +676,7 @@ const ConfettiTrigger: React.FC<{ active: boolean }> = ({ active }) => {
     const to = setTimeout(() => {
       cancelAnimationFrame(frame);
       canvas.remove();
-    }, 2500);
+    }, 1600);
     const onResize = () => {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
