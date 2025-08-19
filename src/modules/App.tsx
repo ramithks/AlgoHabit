@@ -98,9 +98,10 @@ export const App: React.FC = () => {
   const [prefReducedMotion, setPrefReducedMotion] = useState(
     () => localStorage.getItem("dsa-pref-reduced-motion") === "1"
   );
-  const [prefSfx, setPrefSfx] = useState(
-    () => localStorage.getItem("dsa-pref-sfx") === "1"
-  );
+  const [prefSfx, setPrefSfx] = useState(() => {
+    const v = localStorage.getItem("dsa-pref-sfx");
+    return v === null ? true : v === "1";
+  });
   const [activityDays, setActivityDays] = useState<string[]>(() =>
     getActivityDays()
   );
@@ -189,6 +190,18 @@ export const App: React.FC = () => {
     ensureServiceWorker();
   }, []);
 
+  // Nudge audio context on first user interaction (browser autoplay policy)
+  useEffect(() => {
+    const fn = () => {
+      try {
+        sfx.setEnabled(prefSfx);
+      } catch {}
+      window.removeEventListener("pointerdown", fn);
+    };
+    window.addEventListener("pointerdown", fn);
+    return () => window.removeEventListener("pointerdown", fn);
+  }, [prefSfx]);
+
   // Daily tasks removed
 
   // initial focus state handled by the effect that watches prefFocusDefault
@@ -251,7 +264,7 @@ export const App: React.FC = () => {
   }, [achievements]);
 
   if (!authUser) {
-    return <AuthScreen onAuthed={(u) => setAuthUser(u)} />;
+    return <AuthScreen onAuthed={(u: any) => setAuthUser(u)} />;
   }
   return (
     <div
@@ -316,16 +329,12 @@ export const App: React.FC = () => {
         <div className="h-0.5 w-full gradient-bar opacity-60" />
       </header>
       <main
-        className={`flex-1 grid gap-6 p-5 transition-all min-w-0 ${
-          focusMode
-            ? "grid-cols-1 place-items-center"
-            : "xl:grid-cols-[310px_1fr_340px] lg:grid-cols-[280px_1fr]"
-        }`}
+        className={`flex-1 grid gap-6 p-5 transition-all min-w-0 xl:grid-cols-[310px_1fr_340px] lg:grid-cols-[280px_1fr]`}
       >
         <div
-          className={`flex flex-col gap-6 ${
-            focusMode ? "hidden lg:block opacity-0 pointer-events-none" : ""
-          } transition min-w-0`}
+          className={`hidden lg:flex flex-col gap-6 transition min-w-0 ${
+            focusMode ? "lg:opacity-0 lg:pointer-events-none" : ""
+          }`}
         >
           <Timeline
             activeWeek={activeWeek}
@@ -353,7 +362,7 @@ export const App: React.FC = () => {
             }}
           />
         </div>
-        <div className="flex flex-col gap-6 focus-core min-w-0 w-full max-w-3xl">
+        <div className="flex flex-col gap-6 focus-core min-w-0 w-full max-w-3xl mx-auto">
           <FocusClock />
           {!focusMode && (
             <div className="xl:hidden">
@@ -390,9 +399,9 @@ export const App: React.FC = () => {
           <ReviewSuggestions items={reviewSuggestions} />
         </div>
         <div
-          className={`hidden xl:flex flex-col gap-6 ${
-            focusMode ? "hidden" : ""
-          } transition min-w-0`}
+          className={`hidden xl:flex flex-col gap-6 transition min-w-0 ${
+            focusMode ? "xl:opacity-0 xl:pointer-events-none" : ""
+          }`}
         >
           <Suspense fallback={null}>
             <StreakHeatmapLazy days={activityDays} />

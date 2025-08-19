@@ -107,6 +107,33 @@ export const SettingsPanel: React.FC<{
                   onToggle={onToggleSfx}
                 />
               )}
+              {(typeof onToggleSfx === "function" ||
+                typeof onToggleReducedMotion === "function" ||
+                typeof onToggleDisableConfetti === "function" ||
+                typeof onToggleFocusDefault === "function") && (
+                <div className="pt-2">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Reset to defaults: Focus off, Confetti enabled, Reduced Motion off, SFX on
+                      try {
+                        localStorage.setItem("dsa-pref-focus-default", "0");
+                        localStorage.setItem("dsa-pref-disable-confetti", "0");
+                        localStorage.setItem("dsa-pref-reduced-motion", "0");
+                        localStorage.setItem("dsa-pref-sfx", "1");
+                      } catch {}
+                      // toggle each only if current UI doesn't match default
+                      if (prefFocusDefault) onToggleFocusDefault?.();
+                      if (prefDisableConfetti) onToggleDisableConfetti?.();
+                      if (prefReducedMotion) onToggleReducedMotion?.();
+                      if (prefSfx === false) onToggleSfx?.();
+                    }}
+                    className="mt-2 text-[11px] px-3 py-1.5 rounded bg-gray-700/60 text-gray-200 hover:bg-gray-700 border border-gray-600/60"
+                  >
+                    Reset Preferences
+                  </button>
+                </div>
+              )}
             </div>
           </section>
           <section className="space-y-2">

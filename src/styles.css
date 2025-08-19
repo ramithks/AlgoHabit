@@ -143,12 +143,29 @@ body::after {
 .divider { height:1px; background: linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.12),rgba(255,255,255,0)); }
 
 /* Toggle enhancements (uses existing markup) */
-button:has(> span > span > span) { transition: background var(--transition); }
+button:has(> span > span > span) { transition: background var(-o-transition); }
 
 /* Motion reduction hook */
 .reduced-motion *, .reduced-motion *::before, .reduced-motion *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:0ms !important; }
 
-.focus-mode main > *:not(.focus-core) { display: none !important; }
+/* Focus mode: smoothly fade/hide non-core without resizing core */
+.focus-mode main > *:not(.focus-core) {
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transform: translateY(4px);
+  transition: opacity var(--transition), transform var(--transition);
+}
+.focus-core {
+  transition: opacity var(--transition), transform var(--transition);
+}
+.focus-mode .focus-core {
+  opacity: 1;
+  transform: none;
+}
+/* Avoid size jump: keep card sizes stable */
+.focus-core > section, .focus-core > div {
+  transform: none !important;
+}
 
 .glass-sheen {
   position: relative;

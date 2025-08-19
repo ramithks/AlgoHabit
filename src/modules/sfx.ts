@@ -13,12 +13,19 @@ type SfxName =
   | "schedule"
   | "cancel";
 
-let enabled = false;
+let enabled = true;
 try {
-  enabled = localStorage.getItem("dsa-pref-sfx") === "1";
+  const v = localStorage.getItem("dsa-pref-sfx");
+  if (v === "0") enabled = false; // default ON unless explicitly disabled
 } catch {}
 
 let ctx: AudioContext | null = null;
+
+async function ensureResumed(c: AudioContext) {
+  try {
+    if (c.state === "suspended") await c.resume();
+  } catch {}
+}
 
 function getCtx(): AudioContext | null {
   if (!enabled) return null;
@@ -27,6 +34,12 @@ function getCtx(): AudioContext | null {
     // @ts-ignore
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!ctx && AC) ctx = new AC();
+    if (ctx) {
+      // attempt to resume (no-op if already running)
+      // best-effort without awaiting (avoids blocking UI thread)
+      // @ts-ignore
+      if (typeof ctx.resume === "function") ctx.resume().catch(() => {});
+    }
     return ctx;
   } catch {
     return null;
