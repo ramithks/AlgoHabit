@@ -69,6 +69,7 @@ export const App: React.FC = () => {
     xp?: number;
   }>(() => ({ topics: [], streak: 0 }));
   const [activeWeek, setActiveWeek] = useState(1);
+  const [showRoadmap, setShowRoadmap] = useState(false);
   const [quote, setQuote] = useState(randomQuote());
   // Daily tasks removed
   const [notifStatus, setNotifStatus] = useState<
@@ -240,6 +241,21 @@ export const App: React.FC = () => {
     return () => window.removeEventListener("resize", resize);
   }, [focusMode]);
 
+  // Roadmap drawer: esc to close and lock body scroll
+  useEffect(() => {
+    if (!showRoadmap) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowRoadmap(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [showRoadmap]);
+
   useEffect(() => {
     const atSettings = location.pathname.endsWith("/settings");
     setShowSettings(atSettings);
@@ -304,6 +320,14 @@ export const App: React.FC = () => {
                 xp={lvlDetails.totalXP}
               />
             </div>
+            {/* Mobile: open roadmap drawer */}
+            <button
+              onClick={() => setShowRoadmap(true)}
+              className="btn btn-ghost text-[11px] !px-3 !py-1.5 inline-flex lg:hidden"
+              aria-label="Open Roadmap"
+            >
+              Roadmap
+            </button>
             {xpDelta && (
               <span className="absolute -top-2 right-2 text-[10px] px-1 py-0.5 rounded bg-emerald-500/30 text-emerald-300 animate-[fadeIn_.2s_ease,fadeOut_.4s_ease_1.4s] pointer-events-none">
                 +{xpDelta} XP
@@ -407,6 +431,54 @@ export const App: React.FC = () => {
             <WeeklyReviewLazy week={activeWeek} topics={data.topics} />
           </Suspense>
           <ReviewSuggestions items={reviewSuggestions} />
+
+          {/* Mobile/Tablet: Notifications and Leaderboard visible here */}
+          {!focusMode && (
+            <div className="xl:hidden flex flex-col gap-6">
+              <section>
+                <NotificationPanel
+                  status={notifStatus}
+                  onRequest={async () => {
+                    const p = await requestNotificationPermission();
+                    setNotifStatus(p);
+                  }}
+                  reminders={reminders}
+                  onSchedule={() => {
+                    const id = scheduleLocalReminder(
+                      remMinutes * 60 * 1000,
+                      "DSA Focus Block",
+                      "Start your planned session now."
+                    );
+                    setReminders(listReminders());
+                    try {
+                      const el = document.createElement("div");
+                      el.className =
+                        "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                      el.textContent = "Reminder scheduled";
+                      document.body.appendChild(el);
+                      setTimeout(() => el.remove(), 1600);
+                    } catch {}
+                    return id;
+                  }}
+                  onCancel={(id: string) => {
+                    cancelReminder(id);
+                    setReminders(listReminders());
+                    try {
+                      const el = document.createElement("div");
+                      el.className =
+                        "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-gray-200 ring-1 ring-gray-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.2s]";
+                      el.textContent = "Reminder canceled";
+                      document.body.appendChild(el);
+                      setTimeout(() => el.remove(), 1600);
+                    } catch {}
+                  }}
+                  remMinutes={remMinutes}
+                  onChangeMinutes={setRemMinutes}
+                />
+              </section>
+              <LeaderboardMock />
+            </div>
+          )}
         </div>
         <div
           className={`hidden xl:flex flex-col gap-6 transition min-w-0 ${
@@ -459,6 +531,57 @@ export const App: React.FC = () => {
           />
         </div>
       </main>
+      {/* Mobile/Tablet slide-in for 8-Week Roadmap + Weekly Topics */}
+      {showRoadmap && !focusMode && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowRoadmap(false)}
+          />
+          {/* Panel */}
+          <aside className="absolute left-0 top-0 h-full w-[88%] max-w-sm bg-gray-950 ring-1 ring-gray-800 shadow-2xl animate-[slideIn_.2s_ease] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/70">
+              <div className="text-sm font-semibold text-gray-200">Roadmap & Topics</div>
+              <button
+                className="btn btn-ghost text-[11px] !px-3 !py-1.5"
+                onClick={() => setShowRoadmap(false)}
+                aria-label="Close"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-4 space-y-4 overflow-y-auto min-w-0">
+              <Timeline
+                activeWeek={activeWeek}
+                onSelectWeek={(w) => {
+                  setActiveWeek(w);
+                }}
+                topics={data.topics}
+              />
+              <WeekBoard
+                week={activeWeek}
+                topics={data.topics}
+                onStatusChange={(id: string, status: TopicStatus) => {
+                  const prev = data.topics.find((t) => t.id === id)?.status;
+                  store.setStatus(id, status);
+                  recordActivity();
+                  setActivityDays(getActivityDays());
+                  if (status === "complete" && prev !== "complete") {
+                    setRecentAchievement("topic-complete");
+                    setTimeout(() => setRecentAchievement(null), 2000);
+                  }
+                }}
+                onAddNote={(id: string, note: string) => {
+                  store.addDailyNote(id, note);
+                  recordActivity();
+                  setActivityDays(getActivityDays());
+                }}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
       <footer className="text-xs text-gray-500 px-5 py-3 border-t border-gray-800 flex items-center gap-4 bg-gray-950/60 backdrop-blur">
         <span>
           Practice anywhere; this app tracks your habit and topic progress.

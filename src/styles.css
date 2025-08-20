@@ -214,3 +214,9 @@ button:has(> span > span > span) { transition: background var(-o-transition); }
   0%,100% { opacity: .45 }
   50% { opacity: 1 }
 }
+
+/* Slide-in animation for mobile drawer */
+@keyframes slideIn {
+  from { transform: translateX(-8%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
