@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { App } from "./modules/App";
 import { AuthScreen } from "./modules/components";
-import { PublicProfilePage } from "./modules/public";
+import { PublicProfilePage, LandingPage } from "./modules/public";
 import {
   BrowserRouter,
   Navigate,
@@ -27,7 +27,7 @@ const AuthPage: React.FC = () => {
 const RootApp: React.FC = () => (
   <BrowserRouter basename={import.meta.env.BASE_URL}>
     <Routes>
-      <Route path="/" element={<Navigate to="/app" replace />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route
         path="/app"

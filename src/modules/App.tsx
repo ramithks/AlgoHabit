@@ -542,7 +542,9 @@ export const App: React.FC = () => {
           {/* Panel */}
           <aside className="absolute left-0 top-0 h-full w-[88%] max-w-sm bg-gray-950 ring-1 ring-gray-800 shadow-2xl animate-[slideIn_.2s_ease] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/70">
-              <div className="text-sm font-semibold text-gray-200">Roadmap & Topics</div>
+              <div className="text-sm font-semibold text-gray-200">
+                Roadmap & Topics
+              </div>
               <button
                 className="btn btn-ghost text-[11px] !px-3 !py-1.5"
                 onClick={() => setShowRoadmap(false)}
