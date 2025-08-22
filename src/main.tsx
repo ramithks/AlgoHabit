@@ -3,7 +3,15 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { App } from "./modules/App";
 import { AuthScreen } from "./modules/components";
-import { PublicProfilePage, LandingPage } from "./modules/public";
+import {
+  PublicProfilePage,
+  LandingPage,
+  TermsPage,
+  PrivacyPage,
+  RefundsPage,
+  ShippingPage,
+  ContactPage,
+} from "./modules/public";
 import {
   BrowserRouter,
   Navigate,
@@ -46,6 +54,11 @@ const RootApp: React.FC = () => (
         }
       />
       <Route path="/u/:username" element={<PublicProfilePage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/refunds" element={<RefundsPage />} />
+      <Route path="/shipping" element={<ShippingPage />} />
+      <Route path="/contact" element={<ContactPage />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   </BrowserRouter>

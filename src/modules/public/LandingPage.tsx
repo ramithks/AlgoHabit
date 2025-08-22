@@ -1,7 +1,11 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { Suspense, lazy } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { getActiveUser } from "../localAuth";
-import { StreakHeatmap } from "../components/StreakHeatmap";
+const StreakHeatmapLazy = lazy(() =>
+  import("../components/StreakHeatmap").then((m) => ({
+    default: m.StreakHeatmap,
+  }))
+);
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -129,7 +133,9 @@ export const LandingPage: React.FC = () => {
               </ul>
             </div>
             <div className="panel p-4">
-              <StreakHeatmap days={daysSample} />
+              <Suspense fallback={null}>
+                <StreakHeatmapLazy days={daysSample} />
+              </Suspense>
             </div>
           </div>
         </section>
@@ -263,8 +269,26 @@ export const LandingPage: React.FC = () => {
       </main>
 
       <footer className="text-xs text-gray-500 px-6 py-4 border-t border-gray-800/60 bg-gray-950/60 backdrop-blur">
-        © {new Date().getFullYear()} AlgoHabit. Practice anywhere; build
-        momentum every day.
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <span>© {new Date().getFullYear()} AlgoHabit.</span>
+          <span className="sm:ml-auto flex flex-wrap gap-x-4 gap-y-2">
+            <Link className="hover:text-gray-300" to="/privacy">
+              Privacy
+            </Link>
+            <Link className="hover:text-gray-300" to="/terms">
+              Terms
+            </Link>
+            <Link className="hover:text-gray-300" to="/refunds">
+              Cancellation & Refunds
+            </Link>
+            <Link className="hover:text-gray-300" to="/shipping">
+              Shipping
+            </Link>
+            <Link className="hover:text-gray-300" to="/contact">
+              Contact
+            </Link>
+          </span>
+        </div>
       </footer>
     </div>
   );
