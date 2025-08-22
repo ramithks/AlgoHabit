@@ -4,7 +4,6 @@ export * from "./WeekBoard";
 export * from "./WeeklyReview";
 export * from "./Timeline";
 export * from "./SettingsPanel";
-export * from "./StreakHeatmap";
 export * from "./AchievementsPanel";
 export * from "./CommandPalette";
 export * from "./StreakBadge";
