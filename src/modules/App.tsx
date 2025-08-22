@@ -20,6 +20,7 @@ import {
   StatusCluster,
 } from "./components";
 import { FocusClock } from "./components/FocusClock";
+import { useProStatus } from "./hooks/useProStatus";
 
 // Lazy-loaded components for code-splitting
 const SettingsPanelLazy = lazy(() =>
@@ -292,6 +293,7 @@ export const App: React.FC = () => {
   if (!authUser) {
     return <AuthScreen onAuthed={(u: any) => setAuthUser(u)} />;
   }
+  const { isPro } = useProStatus();
   return (
     <div
       className={`min-h-full flex flex-col ${focusMode ? "focus-mode" : ""}`}
@@ -306,6 +308,16 @@ export const App: React.FC = () => {
             <span className="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-400 font-normal">
               beta
             </span>
+            {isPro ? (
+              <span className="badge badge-accent">Pro</span>
+            ) : (
+              <button
+                className="btn btn-primary text-[11px] !px-3 !py-1.5 hidden sm:inline-flex"
+                onClick={() => navigate("/#pricing")}
+              >
+                Upgrade
+              </button>
+            )}
           </div>
           <div className="hidden md:block text-sm text-gray-400 order-3 sm:order-none">
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}

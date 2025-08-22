@@ -1,5 +1,6 @@
 export { PublicProfilePage } from "./PublicProfilePage";
 export { LandingPage } from "./LandingPage";
+export { PricingPage } from "./PricingPage";
 export { TermsPage } from "./legal/TermsPage";
 export { PrivacyPage } from "./legal/PrivacyPage";
 export { RefundsPage } from "./legal/RefundsPage";

@@ -6,6 +6,7 @@ import { AuthScreen } from "./modules/components";
 import {
   PublicProfilePage,
   LandingPage,
+  PricingPage,
   TermsPage,
   PrivacyPage,
   RefundsPage,
@@ -20,6 +21,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { getActiveUser } from "./modules/localAuth";
+import { useProStatus } from "./modules/hooks/useProStatus";
 
 const Protected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const user = getActiveUser();
@@ -32,6 +34,17 @@ const AuthPage: React.FC = () => {
   return <AuthScreen onAuthed={() => nav("/app", { replace: true })} />;
 };
 
+const ProtectedPro: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const user = getActiveUser();
+  if (!user) return <Navigate to="/auth" replace />;
+  const { isPro, loading } = useProStatus();
+  if (loading) return null;
+  if (!isPro) return <Navigate to="/#pricing" replace />;
+  return <>{children}</>;
+};
+
 const RootApp: React.FC = () => (
   <BrowserRouter basename={import.meta.env.BASE_URL}>
     <Routes>
@@ -40,20 +53,22 @@ const RootApp: React.FC = () => (
       <Route
         path="/app"
         element={
-          <Protected>
+          <ProtectedPro>
             <App />
-          </Protected>
+          </ProtectedPro>
         }
       />
       <Route
         path="/settings"
         element={
-          <Protected>
+          <ProtectedPro>
             <App />
-          </Protected>
+          </ProtectedPro>
         }
       />
       <Route path="/u/:username" element={<PublicProfilePage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/pricing" element={<Navigate to="/#pricing" replace />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/refunds" element={<RefundsPage />} />
