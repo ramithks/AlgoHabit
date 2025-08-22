@@ -208,9 +208,40 @@ export interface Database {
           }
         ];
       };
+      // Subscriptions minimal typing (view)
+      v_active_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan: string;
+          plan_label: string | null;
+          start_date: string;
+          end_date: string | null;
+          grace_days: number;
+          status: string;
+          razorpay_subscription_id: string | null;
+          razorpay_order_id: string | null;
+          razorpay_payment_id: string | null;
+          payment_state: string;
+          currency: string | null;
+          amount_paise: number | null;
+          created_at: string;
+          updated_at: string;
+          is_active: boolean | null;
+          grace_until: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: {};
-    Functions: {};
+    Functions: {
+      is_pro: {
+        Args: { uid: string };
+        Returns: boolean;
+      };
+    };
     Enums: {};
     CompositeTypes: {};
   };

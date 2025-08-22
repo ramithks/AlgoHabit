@@ -83,6 +83,12 @@ export const LandingPage: React.FC = () => {
             </button>
           </nav>
           <div className="ml-2 flex items-center gap-2">
+            <Link
+              to="/pricing"
+              className="btn btn-ghost text-[11px] hidden sm:inline-flex"
+            >
+              Pricing
+            </Link>
             <button
               className="btn btn-primary text-[11px]"
               onClick={() => navigate(user ? "/app" : "/auth")}
@@ -224,13 +230,76 @@ export const LandingPage: React.FC = () => {
           </div>
         </section>
 
+        {/* Pricing (embedded) */}
+        <section id="pricing" className="px-6 pb-14 max-w-6xl mx-auto">
+          <h2 className="text-lg font-semibold text-gray-100 mb-2">Pricing</h2>
+          <div className="text-[12px] text-gray-400 mb-4">
+            All plans include: full roadmap, streak heatmap, focus mode,
+            reminders.
+          </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                k: "pro_monthly",
+                t: "Pro Monthly",
+                p: "₹99",
+                s: "billed monthly",
+                d: "–",
+              },
+              {
+                k: "pro_yearly",
+                t: "Pro Yearly",
+                p: "₹699",
+                s: "billed yearly",
+                b: true,
+                d: "41% off vs monthly",
+              },
+              {
+                k: "pro_lifetime",
+                t: "Lifetime",
+                p: "₹1,999",
+                s: "one-time",
+                d: "Own it forever",
+              },
+            ].map((x: any) => (
+              <div
+                key={x.k}
+                className={`panel p-0 ${x.b ? "ring-2 ring-accent" : ""}`}
+              >
+                <div className="px-4 py-3 flex items-baseline justify-between">
+                  <h3 className="text-gray-100 font-semibold">{x.t}</h3>
+                  {x.b && (
+                    <span className="badge badge-accent">Best Value</span>
+                  )}
+                </div>
+                <div className="px-4">
+                  <div className="text-2xl font-bold text-gray-100">{x.p}</div>
+                  <div className="text-[11px] text-gray-400 mb-2">{x.s}</div>
+                  <div className="text-[11px] text-emerald-400 mb-4">{x.d}</div>
+                </div>
+                <div className="px-4 pb-4">
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => navigate(user ? "/pricing" : "/auth")}
+                  >
+                    Get Pro
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-3">
+            More options on Pricing page.
+          </div>
+        </section>
+
         {/* FAQ */}
         <section id="faq" className="px-6 pb-16 max-w-4xl mx-auto">
           <h2 className="text-lg font-semibold text-gray-100 mb-4">FAQ</h2>
           <div className="space-y-2">
             <FAQItem
               q="Is AlgoHabit free?"
-              a="Yes, you can use AlgoHabit free. Some future features may be optional upgrades."
+              a="AlgoHabit requires a Pro subscription. You can browse the landing pages, but the app is Pro-only."
             />
             <FAQItem
               q="Do I need an account?"

@@ -521,3 +521,148 @@ begin
     end;
   end if;
 end $$;
+
+-- ==========================
+-- Subscriptions & Payments
+-- ==========================
+
+-- Plan types and subscription status enums
+do $$
+begin
+  create type plan_type as enum (
+    'weekly','monthly','quarterly','semiannual','yearly','biennial','lifetime'
+  );
+exception when duplicate_object then null;
+end;$$;
+
+do $$
+begin
+  create type subscription_status as enum (
+    'pending','active','canceled','expired','failed'
+  );
+exception when duplicate_object then null;
+end;$$;
+
+do $$
+begin
+  create type payment_status as enum ('created','pending','success','failed');
+exception when duplicate_object then null;
+end;$$;
+
+-- Main subscriptions table
+create table if not exists public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  plan plan_type not null,
+  plan_label text, -- e.g., pro_weekly
+  start_date timestamptz not null default now(),
+  end_date timestamptz,
+  grace_days integer not null default 2,
+  status subscription_status not null default 'pending',
+  -- Razorpay mapping
+  razorpay_subscription_id text,
+  razorpay_order_id text,
+  razorpay_payment_id text,
+  payment_state payment_status not null default 'created',
+  currency text default 'INR',
+  amount_paise integer, -- latest cycle amount for reference
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_subscriptions_user on public.subscriptions(user_id);
+create index if not exists idx_subscriptions_status on public.subscriptions(status);
+create index if not exists idx_subscriptions_dates on public.subscriptions(user_id, end_date);
+
+-- Payments history table
+create table if not exists public.subscription_payments (
+  id uuid primary key default gen_random_uuid(),
+  subscription_id uuid references public.subscriptions(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  amount_paise integer not null,
+  currency text not null default 'INR',
+  status payment_status not null,
+  razorpay_order_id text,
+  razorpay_payment_id text,
+  razorpay_signature text,
+  paid_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_sub_payments_user on public.subscription_payments(user_id);
+create index if not exists idx_sub_payments_sub on public.subscription_payments(subscription_id);
+
+alter table public.subscriptions enable row level security;
+alter table public.subscription_payments enable row level security;
+
+-- Owner policies
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='subscriptions' and policyname='subscriptions rw'
+  ) then
+    create policy "subscriptions rw" on public.subscriptions
+    for all using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='subscription_payments' and policyname='sub_payments rw'
+  ) then
+    create policy "sub_payments rw" on public.subscription_payments
+    for all using ( user_id = (select auth.uid()) ) with check ( user_id = (select auth.uid()) );
+  end if;
+end $$;
+
+-- updated_at trigger for subscriptions
+drop trigger if exists set_updated_at_subscriptions on public.subscriptions;
+create trigger set_updated_at_subscriptions before update on public.subscriptions
+for each row execute function public.set_updated_at();
+
+-- Helper: compute if subscription is active including grace period
+create or replace function public.subscription_is_active(s public.subscriptions)
+returns boolean as $$
+begin
+  if s.plan = 'lifetime' and s.status = 'active' then
+    return true;
+  end if;
+  if s.status <> 'active' then
+    -- allow pending if within start/end? keep strict
+    null;
+  end if;
+  if s.end_date is null then
+    return s.status = 'active';
+  end if;
+  return (
+    now() <= s.end_date
+    or now() <= (s.end_date + make_interval(days => greatest(s.grace_days, 0)))
+  ) and s.status = 'active';
+end;
+$$ language plpgsql immutable set search_path = public;
+
+-- View: active subscription per user (latest first)
+create or replace view public.v_active_subscriptions as
+select distinct on (user_id)
+  s.*,
+  public.subscription_is_active(s) as is_active,
+  (case when s.end_date is not null then s.end_date + make_interval(days => greatest(s.grace_days,0)) end) as grace_until
+from public.subscriptions s
+order by user_id, coalesce(s.end_date, s.created_at) desc, s.created_at desc;
+
+-- Helper: check pro status quickly
+create or replace function public.is_pro(uid uuid)
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(v.is_active, false)
+  from public.v_active_subscriptions v
+  where v.user_id = uid
+  limit 1
+$$;
+
+revoke all on function public.is_pro(uuid) from public;
+grant execute on function public.is_pro(uuid) to authenticated;
