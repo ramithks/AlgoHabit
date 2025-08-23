@@ -4,10 +4,9 @@ export const LevelBadge: React.FC<{
   level: number;
   xpInto: number;
   xpFor: number;
-  pct: number;
   totalXP: number;
   pulse?: boolean;
-}> = ({ level, xpInto, xpFor, pct, totalXP, pulse }) => {
+}> = ({ level, xpInto, xpFor, totalXP, pulse }) => {
   return (
     <div
       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-gray-900/80 ring-1 ring-gray-800 shadow ${

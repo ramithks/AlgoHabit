@@ -1,7 +1,6 @@
 import React from "react";
 import {
   updateProfile,
-  randomUsername,
   getProfileById,
   getProfileByUsername,
 } from "../repos/profilesRepo";
@@ -33,7 +32,7 @@ export const SettingsPanel: React.FC<{
   userId,
   onReset,
   onLogout,
-  onSyncNow,
+  onSyncNow: _onSyncNow,
   prefFocusDefault,
   onToggleFocusDefault,
   prefDisableConfetti,
@@ -1050,7 +1049,10 @@ export const SettingsPanel: React.FC<{
   );
 };
 
-const Stat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+const _Stat: React.FC<{ label: string; value: string }> = ({
+  label,
+  value,
+}) => (
   <div className="bg-gray-800/60 rounded p-2 flex flex-col gap-1">
     <span className="text-gray-500">{label}</span>
     <span className="text-gray-200 font-medium">{value}</span>

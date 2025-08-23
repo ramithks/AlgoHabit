@@ -6,7 +6,6 @@ import { AuthScreen } from "./modules/components";
 import {
   PublicProfilePage,
   LandingPage,
-  PricingPage,
   TermsPage,
   PrivacyPage,
   RefundsPage,
@@ -23,11 +22,7 @@ import {
 import { getActiveUser } from "./modules/localAuth";
 import { useProStatus } from "./modules/hooks/useProStatus";
 
-const Protected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const user = getActiveUser();
-  if (!user) return <Navigate to="/auth" replace />;
-  return <>{children}</>;
-};
+// Protected wrapper removed (not used) — protected routes use ProtectedPro
 
 const AuthPage: React.FC = () => {
   const nav = useNavigate();
@@ -37,9 +32,10 @@ const AuthPage: React.FC = () => {
 const ProtectedPro: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  // call hook unconditionally to satisfy rules-of-hooks
+  const { isPro, loading } = useProStatus();
   const user = getActiveUser();
   if (!user) return <Navigate to="/auth" replace />;
-  const { isPro, loading } = useProStatus();
   if (loading) return null;
   if (!isPro) return <Navigate to="/#pricing" replace />;
   return <>{children}</>;
@@ -67,7 +63,7 @@ const RootApp: React.FC = () => (
         }
       />
       <Route path="/u/:username" element={<PublicProfilePage />} />
-      <Route path="/pricing" element={<PricingPage />} />
+      {/* Pricing is embedded on the landing page; keep redirect for legacy links */}
       <Route path="/pricing" element={<Navigate to="/#pricing" replace />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />

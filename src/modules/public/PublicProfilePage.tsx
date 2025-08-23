@@ -36,7 +36,7 @@ export const PublicProfilePage: React.FC = () => {
       try {
         // eslint-disable-next-line no-console
         console.debug("PublicProfilePage load start", { username });
-        let p = await getProfileByUsername(username);
+        const p = await getProfileByUsername(username);
         // eslint-disable-next-line no-console
         console.debug("PublicProfilePage profile lookup", p);
         if (!p) {
