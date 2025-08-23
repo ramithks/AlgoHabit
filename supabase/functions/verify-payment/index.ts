@@ -4,7 +4,7 @@
 // Verifies HMAC and writes to Supabase subscriptions & payments.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import * as crypto from "https://deno.land/std@0.224.0/crypto/mod.ts";
+// Use the global WebCrypto API available in the Edge runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 function planToDuration(plan_key: string): {
@@ -33,27 +33,52 @@ function planToDuration(plan_key: string): {
 }
 
 serve(async (req) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "authorization, apikey, content-type, x-client-info, x-supabase-api-version",
+    "Access-Control-Max-Age": "86400",
+  } as const;
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: { ...corsHeaders } });
+  }
   if (req.method !== "POST")
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { ...corsHeaders },
+    });
   try {
     const { order_id, payment_id, signature, plan_key, user_id, amount_paise } =
       await req.json();
     if (!order_id || !payment_id || !signature || !plan_key || !user_id) {
       return new Response(JSON.stringify({ error: "missing_fields" }), {
         status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
     const secret = Deno.env.get("RAZORPAY_SECRET");
-    if (!secret) return new Response("Missing secret", { status: 500 });
+    if (!secret)
+      return new Response("Missing secret", {
+        status: 500,
+        headers: { ...corsHeaders },
+      });
     const body = `${order_id}|${payment_id}`;
-    const key = await crypto.subtle.importKey(
+    const subtle = (globalThis as any).crypto?.subtle;
+    if (!subtle) {
+      return new Response(JSON.stringify({ error: "webcrypto_unavailable" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const key = await subtle.importKey(
       "raw",
       new TextEncoder().encode(secret),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["sign"]
     );
-    const sigBuf = await crypto.subtle.sign(
+    const sigBuf = await subtle.sign(
       "HMAC",
       key,
       new TextEncoder().encode(body)
@@ -64,6 +89,7 @@ serve(async (req) => {
     if (expected !== signature) {
       return new Response(JSON.stringify({ error: "invalid_signature" }), {
         status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!; // auto-injected by Supabase
@@ -108,9 +134,12 @@ serve(async (req) => {
     });
 
     return new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 });

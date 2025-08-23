@@ -3,7 +3,6 @@
 // Verifies X-Razorpay-Signature using RAZORPAY_WEBHOOK_SECRET and writes to DB.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import * as crypto from "https://deno.land/std@0.224.0/crypto/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 async function verifySignature(
@@ -11,18 +10,16 @@ async function verifySignature(
   payload: string,
   provided: string
 ) {
-  const key = await crypto.subtle.importKey(
+  const subtle = (globalThis as any).crypto?.subtle;
+  if (!subtle) return false;
+  const key = await subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
   );
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(payload)
-  );
+  const sig = await subtle.sign("HMAC", key, new TextEncoder().encode(payload));
   const hex = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -35,9 +32,28 @@ serve(async (req) => {
   const secret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET");
   if (!secret) return new Response("Missing webhook secret", { status: 500 });
   const payload = await req.text();
-  const sig = req.headers.get("x-razorpay-signature") || "";
+  const headersDump: Record<string, string> = {};
+  req.headers.forEach((v, k) => (headersDump[k] = v));
+  console.log("webhook: incoming headers", headersDump);
+  const sig =
+    req.headers.get("x-razorpay-signature") ||
+    req.headers.get("X-Razorpay-Signature") ||
+    "";
+  if (!sig) {
+    console.error("webhook: missing x-razorpay-signature header");
+    return new Response(JSON.stringify({ error: "missing_signature" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const ok = await verifySignature(secret, payload, sig);
-  if (!ok) return new Response("Invalid signature", { status: 400 });
+  if (!ok) {
+    console.error("webhook: invalid signature");
+    return new Response(JSON.stringify({ error: "invalid_signature" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const ev = JSON.parse(payload);
   const supabase = createClient(
@@ -51,6 +67,12 @@ serve(async (req) => {
         const p = ev.payload.payment.entity;
         const user_id = p.notes?.user_id || null;
         const plan_key = p.notes?.plan_key || null;
+        console.log("webhook: payment.captured", {
+          order_id: p.order_id,
+          id: p.id,
+          user_id,
+          plan_key,
+        });
         if (user_id) {
           await supabase.from("subscription_payments").insert({
             user_id,
@@ -100,6 +122,11 @@ serve(async (req) => {
       case "payment.failed": {
         const p = ev.payload.payment.entity;
         const user_id = p.notes?.user_id || null;
+        console.log("webhook: payment.failed", {
+          order_id: p.order_id,
+          id: p.id,
+          user_id,
+        });
         if (user_id) {
           await supabase.from("subscription_payments").insert({
             user_id,
@@ -114,7 +141,11 @@ serve(async (req) => {
       }
     }
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
+    console.error("webhook: handler error", String(e));
+    return new Response(JSON.stringify({ error: String(e) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   return new Response("ok");
 });
