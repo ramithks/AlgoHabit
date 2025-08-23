@@ -1,15 +1,249 @@
 import React, { Suspense, lazy } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { getActiveUser } from "../localAuth";
+import { plans as _plans } from "../payments/plans";
+import { openCheckout } from "../payments/razorpay";
 const StreakHeatmapLazy = lazy(() =>
   import("../components/StreakHeatmap").then((m) => ({
     default: m.StreakHeatmap,
   }))
 );
 
+// Small presentational components used by LandingPage
+const FeatureCard: React.FC<{ title: string; desc: string; icon: string }> = ({
+  title,
+  desc,
+  icon,
+}) => (
+  <div className="panel-interactive panel p-4">
+    <div className="text-2xl mb-2">{icon}</div>
+    <div className="text-sm font-semibold text-gray-200">{title}</div>
+    <div className="text-[12px] text-gray-400 mt-1 leading-relaxed">{desc}</div>
+  </div>
+);
+
+const Step: React.FC<{ n: number; title: string; desc: string }> = ({
+  n,
+  title,
+  desc,
+}) => (
+  <li className="panel p-4">
+    <div className="text-[11px] text-accent/80 font-semibold mb-1">
+      Step {n}
+    </div>
+    <div className="text-sm font-semibold text-gray-200">{title}</div>
+    <div className="text-[12px] text-gray-400 mt-1 leading-relaxed">{desc}</div>
+  </li>
+);
+
+const TestimonialCard: React.FC<{
+  quote: string;
+  name: string;
+  handle: string;
+}> = ({ quote, name, handle }) => (
+  <blockquote className="panel p-4">
+    <p className="text-[13px] text-gray-200 leading-relaxed">“{quote}”</p>
+    <footer className="mt-2 text-[11px] text-gray-400">
+      — {name} <span className="text-gray-500">{handle}</span>
+    </footer>
+  </blockquote>
+);
+
+const FAQItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="panel p-3">
+      <button
+        className="w-full text-left flex items-center justify-between gap-3"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span className="text-sm font-semibold text-gray-200">{q}</span>
+        <span className="text-gray-400 text-xs">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="mt-2 text-[12px] text-gray-400 leading-relaxed">
+          {a}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// default features used when plans don't include a feature list
+const DEFAULT_PLAN_FEATURES = [
+  "Full 8-week curated roadmap",
+  "Advanced progress stats & streaks",
+  "Focus mode, reminders & offline practice",
+  "Priority updates & no ads",
+];
+
+// --- Pricing helpers & interactive components (module scope) ---
+const formatINR = (paise: number) =>
+  `₹${(paise / 100).toLocaleString("en-IN")}`;
+
+const PlanArea: React.FC<{
+  selectedKey?: string;
+  onBuy?: (k: string) => void;
+}> = ({ selectedKey }) => {
+  const all = _plans;
+  const p = all.find((x) => x.key === selectedKey) || all[0];
+  const user = getActiveUser();
+
+  const start = async () => {
+    if (!user) return window.location.assign("/auth");
+    try {
+      await openCheckout({
+        amountPaise: p.pricePaise,
+        name: p.title,
+        description: "AlgoHabit Pro",
+        plan_key: p.key,
+        user_id: user.id,
+      });
+      window.location.assign("/app");
+    } catch {}
+  };
+
+  return (
+    <div className="panel-interactive relative p-6 shadow-2xl rounded-2xl bg-gradient-to-br from-gray-900/80 to-gray-950/90 ring-1 ring-gray-800 transform transition-all duration-300">
+      {/* top-right badge if offer/best */}
+      {p.best && (
+        // badge sits slightly outside the card corner so it doesn't block content
+        <div className="absolute right-4 -top-3 z-10">
+          <div className="badge badge-accent">Best value</div>
+        </div>
+      )}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 pr-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xl font-extrabold text-white">{p.title}</h3>
+            {/* subtle subtitle */}
+          </div>
+          <div className="text-sm text-gray-300 mt-1">{p.sub}</div>
+        </div>
+        <div className="text-3xl sm:text-4xl font-extrabold text-white">
+          {formatINR(p.pricePaise)}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="text-sm text-gray-300 mb-4">
+          Limited-time offer: upgrade now and save.
+        </div>
+        <button
+          className="btn btn-primary w-full text-sm shadow-md transition-transform duration-200 hover:scale-[1.02]"
+          onClick={start}
+          aria-label={`Subscribe to ${p.title}`}
+        >
+          Upgrade to Pro
+        </button>
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-lg font-semibold text-white">What you get</h4>
+        <ul className="mt-3 space-y-2 text-[14px] text-gray-200">
+          {(((p as any).features ?? DEFAULT_PLAN_FEATURES) as string[])
+            .slice(0, 8)
+            .map((f: string, i: number) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="text-accent mt-0.5 flex-shrink-0">●</span>
+                <div className="text-gray-300 leading-tight">{f}</div>
+              </li>
+            ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+const SmallPlansGridWrapper: React.FC<{
+  selectedKey?: string;
+  onSelect?: (k: string) => void;
+}> = ({ selectedKey, onSelect }) => {
+  const user = getActiveUser();
+
+  const handleBuy = async (p: (typeof _plans)[number]) => {
+    if (!user) return window.location.assign("/auth");
+    try {
+      await openCheckout({
+        amountPaise: p.pricePaise,
+        name: p.title,
+        description: "AlgoHabit Pro",
+        plan_key: p.key,
+        user_id: user.id,
+      });
+      window.location.assign("/app");
+    } catch {}
+  };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {_plans.map((p) => {
+        const active = selectedKey === p.key;
+        return (
+          <div
+            key={p.key}
+            onClick={() => onSelect?.(p.key)}
+            className={`panel p-4 rounded-xl transition-shadow duration-200 cursor-pointer relative ${
+              active
+                ? "border border-accent/60 bg-gray-900/80 shadow-sm"
+                : "border border-transparent bg-gray-900/40 hover:border-accent/40 hover:shadow-lg"
+            }`}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onSelect?.(p.key);
+            }}
+            aria-pressed={active}
+          >
+            {/* always-visible overlay stroke for the active card */}
+            {active && (
+              <span
+                className="pointer-events-none absolute -inset-px rounded-xl border border-accent/60 z-20"
+                aria-hidden
+              />
+            )}
+            <div className="relative">
+              {p.best && (
+                // badge placed slightly outside the corner so it sits on the card edge
+                <div className="absolute -right-3 -top-3 z-10">
+                  <div className="text-xs px-2 py-1 rounded bg-amber-600 text-amber-50 font-semibold shadow-sm">
+                    Best 10% off
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-gray-100">
+                  {p.title}
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="text-lg font-bold text-gray-100">
+                  {formatINR(p.pricePaise)}
+                </div>
+                <div className="text-[12px] text-gray-400">{p.sub}</div>
+              </div>
+              {/* small cards intentionally have no CTA button — selection happens by clicking the card; purchase from main card */}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const user = getActiveUser();
+  const [selectedKey, setSelectedKey] = React.useState<string>(() => {
+    // prefer a plan marked as best, fallback to yearly or first
+    return (
+      _plans.find((p) => p.best)?.key ||
+      _plans.find((p) => p.key === "pro_yearly")?.key ||
+      _plans[0]?.key ||
+      ""
+    );
+  });
 
   const daysSample = React.useMemo(() => {
     // Generate a soft demo pattern for the heatmap
@@ -83,12 +317,16 @@ export const LandingPage: React.FC = () => {
             </button>
           </nav>
           <div className="ml-2 flex items-center gap-2">
-            <Link
-              to="/pricing"
+            <button
               className="btn btn-ghost text-[11px] hidden sm:inline-flex"
+              onClick={() =>
+                document
+                  .getElementById("pricing")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
             >
               Pricing
-            </Link>
+            </button>
             <button
               className="btn btn-primary text-[11px]"
               onClick={() => navigate(user ? "/app" : "/auth")}
@@ -230,66 +468,37 @@ export const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Pricing (embedded) */}
-        <section id="pricing" className="px-6 pb-14 max-w-6xl mx-auto">
-          <h2 className="text-lg font-semibold text-gray-100 mb-2">Pricing</h2>
-          <div className="text-[12px] text-gray-400 mb-4">
-            All plans include: full roadmap, streak heatmap, focus mode,
-            reminders.
+        {/* Pricing (revamped) - modern, minimal, responsive */}
+        <section id="pricing" className="px-6 pb-16 max-w-6xl mx-auto">
+          <h2 className="text-lg font-semibold text-gray-100 mb-2 text-left">
+            Pricing
+          </h2>
+          <div className="text-sm text-gray-400 mb-6 max-w-3xl text-left">
+            Build a consistent habit — pick a plan that fits your schedule.
+            Upgrade now and save with limited-time offers.
           </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              {
-                k: "pro_monthly",
-                t: "Pro Monthly",
-                p: "₹99",
-                s: "billed monthly",
-                d: "–",
-              },
-              {
-                k: "pro_yearly",
-                t: "Pro Yearly",
-                p: "₹699",
-                s: "billed yearly",
-                b: true,
-                d: "41% off vs monthly",
-              },
-              {
-                k: "pro_lifetime",
-                t: "Lifetime",
-                p: "₹1,999",
-                s: "one-time",
-                d: "Own it forever",
-              },
-            ].map((x: any) => (
-              <div
-                key={x.k}
-                className={`panel p-0 ${x.b ? "ring-2 ring-accent" : ""}`}
-              >
-                <div className="px-4 py-3 flex items-baseline justify-between">
-                  <h3 className="text-gray-100 font-semibold">{x.t}</h3>
-                  {x.b && (
-                    <span className="badge badge-accent">Best Value</span>
-                  )}
-                </div>
-                <div className="px-4">
-                  <div className="text-2xl font-bold text-gray-100">{x.p}</div>
-                  <div className="text-[11px] text-gray-400 mb-2">{x.s}</div>
-                  <div className="text-[11px] text-emerald-400 mb-4">{x.d}</div>
-                </div>
-                <div className="px-4 pb-4">
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => navigate(user ? "/pricing" : "/auth")}
-                  >
-                    Get Pro
-                  </button>
-                </div>
-              </div>
-            ))}
+
+          {/* Pricing cards layout */}
+          <div className="flex flex-col lg:flex-row items-start justify-center gap-8">
+            {/* Left: Highlighted main plan (dynamic) */}
+            <div className="w-full max-w-md mb-6 lg:mb-0">
+              <PlanArea selectedKey={selectedKey} />
+            </div>
+
+            {/* Right: Other plans grid */}
+            <div className="w-full max-w-2xl">
+              <SmallPlansGridWrapper
+                selectedKey={selectedKey}
+                onSelect={(k) => setSelectedKey(k)}
+              />
+            </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-3">
-            More options on Pricing page.
+
+          <div className="text-[12px] text-gray-500 mt-8 text-center">
+            Prices shown in INR.{" "}
+            <span className="text-gray-400">
+              Secure checkout via Razorpay • Cancel anytime
+            </span>
           </div>
         </section>
 
@@ -363,62 +572,4 @@ export const LandingPage: React.FC = () => {
   );
 };
 
-const FeatureCard: React.FC<{ title: string; desc: string; icon: string }> = ({
-  title,
-  desc,
-  icon,
-}) => (
-  <div className="panel-interactive panel p-4">
-    <div className="text-2xl mb-2">{icon}</div>
-    <div className="text-sm font-semibold text-gray-200">{title}</div>
-    <div className="text-[12px] text-gray-400 mt-1 leading-relaxed">{desc}</div>
-  </div>
-);
-
-const Step: React.FC<{ n: number; title: string; desc: string }> = ({
-  n,
-  title,
-  desc,
-}) => (
-  <li className="panel p-4">
-    <div className="text-[11px] text-accent/80 font-semibold mb-1">
-      Step {n}
-    </div>
-    <div className="text-sm font-semibold text-gray-200">{title}</div>
-    <div className="text-[12px] text-gray-400 mt-1 leading-relaxed">{desc}</div>
-  </li>
-);
-
-const TestimonialCard: React.FC<{
-  quote: string;
-  name: string;
-  handle: string;
-}> = ({ quote, name, handle }) => (
-  <blockquote className="panel p-4">
-    <p className="text-[13px] text-gray-200 leading-relaxed">“{quote}”</p>
-    <footer className="mt-2 text-[11px] text-gray-400">
-      — {name} <span className="text-gray-500">{handle}</span>
-    </footer>
-  </blockquote>
-);
-
-const FAQItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <div className="panel p-3">
-      <button
-        className="w-full text-left flex items-center justify-between gap-3"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className="text-sm font-semibold text-gray-200">{q}</span>
-        <span className="text-gray-400 text-xs">{open ? "−" : "+"}</span>
-      </button>
-      {open && (
-        <div className="mt-2 text-[12px] text-gray-400 leading-relaxed">
-          {a}
-        </div>
-      )}
-    </div>
-  );
-};
+// Old SmallPlansGrid removed; replaced by SmallPlansGridWrapper above.

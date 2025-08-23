@@ -85,7 +85,7 @@ export const App: React.FC = () => {
   );
   const [lastXP, setLastXP] = useState(0);
   const [xpDelta, setXpDelta] = useState<number | null>(null);
-  const [levelPulse, setLevelPulse] = useState(false);
+  const [_levelPulse, setLevelPulse] = useState(false);
   const [authUser, setAuthUser] = useState<ReturnType<typeof getActiveUser>>(
     () => getActiveUser()
   );
@@ -290,10 +290,11 @@ export const App: React.FC = () => {
     }
   }, [achievements]);
 
+  // Call useProStatus unconditionally at top-level to satisfy hooks rule.
+  const { isPro } = useProStatus();
   if (!authUser) {
     return <AuthScreen onAuthed={(u: any) => setAuthUser(u)} />;
   }
-  const { isPro } = useProStatus();
   return (
     <div
       className={`min-h-full flex flex-col ${focusMode ? "focus-mode" : ""}`}

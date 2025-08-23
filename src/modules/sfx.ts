@@ -21,7 +21,7 @@ try {
 
 let ctx: AudioContext | null = null;
 
-async function ensureResumed(c: AudioContext) {
+async function _ensureResumed(c: AudioContext) {
   try {
     if (c.state === "suspended") await c.resume();
   } catch {}
@@ -31,14 +31,14 @@ function getCtx(): AudioContext | null {
   if (!enabled) return null;
   try {
     // Safari prefix safe
-    // @ts-ignore
+    // @ts-expect-error - vendor-prefixed AudioContext on older Safari
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!ctx && AC) ctx = new AC();
     if (ctx) {
       // attempt to resume (no-op if already running)
       // best-effort without awaiting (avoids blocking UI thread)
-      // @ts-ignore
-      if (typeof ctx.resume === "function") ctx.resume().catch(() => {});
+      if (typeof (ctx as any).resume === "function")
+        (ctx as any).resume().catch(() => {});
     }
     return ctx;
   } catch {

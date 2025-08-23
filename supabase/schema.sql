@@ -651,6 +651,25 @@ select distinct on (user_id)
 from public.subscriptions s
 order by user_id, coalesce(s.end_date, s.created_at) desc, s.created_at desc;
 
+-- SECURITY: ensure the active subscriptions view is not exposed to anon/public roles.
+-- Allow only authenticated users (and other privileged roles) to select from this view.
+do $$
+begin
+  -- revoke broadly from public and anon (if present) and grant to authenticated
+  begin
+    revoke all on public.v_active_subscriptions from public;
+  exception when others then null;
+  end;
+  begin
+    revoke all on public.v_active_subscriptions from anon;
+  exception when others then null;
+  end;
+  begin
+    grant select on public.v_active_subscriptions to authenticated;
+  exception when others then null;
+  end;
+end $$;
+
 -- Helper: check pro status quickly
 create or replace function public.is_pro(uid uuid)
 returns boolean
