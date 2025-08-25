@@ -8,9 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
-    "gen:types": "supabase gen types typescript --project-id drmywtlmmrbdaidkbxbc --schema public > src/types/database.generated.ts"
+    "gen:types": "supabase gen types typescript --project-id drmywtlbmrbdaidkbxbc --schema public > src/types/database.generated.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -32,7 +30,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "gh-pages": "^6.3.0",
+
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.4.0",
