@@ -1219,7 +1219,9 @@ export const SettingsPanel: React.FC<{
                     <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
                       <div className="text-gray-500">Renewal</div>
                       <div className="text-gray-200 font-medium mt-0.5">
-                        {subInfo?.end_date
+                        {subInfo?.plan === "lifetime"
+                          ? "Never Expires"
+                          : subInfo?.end_date
                           ? new Date(subInfo.end_date).toLocaleDateString()
                           : isPro
                           ? "Auto-renew"
@@ -1257,16 +1259,19 @@ export const SettingsPanel: React.FC<{
                     <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
                       <div className="text-gray-500">Days Remaining</div>
                       <div className="text-gray-200 font-medium mt-0.5">
-                        {(() => {
-                          if (!subInfo?.end_date) return "—";
-                          const end = new Date(subInfo.end_date).getTime();
-                          const now = Date.now();
-                          const days = Math.max(
-                            0,
-                            Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-                          );
-                          return `${days} day${days === 1 ? "" : "s"}`;
-                        })()}
+                        {subInfo?.plan === "lifetime"
+                          ? "Forever"
+                          : subInfo?.end_date
+                          ? (() => {
+                              const end = new Date(subInfo.end_date).getTime();
+                              const now = Date.now();
+                              const days = Math.max(
+                                0,
+                                Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+                              );
+                              return `${days} day${days === 1 ? "" : "s"}`;
+                            })()
+                          : "—"}
                       </div>
                     </div>
                   )}
@@ -1288,7 +1293,9 @@ export const SettingsPanel: React.FC<{
                     <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
                       <div className="text-gray-500">Renewal Date</div>
                       <div className="text-gray-200 font-medium mt-0.5">
-                        {subInfo?.end_date
+                        {subInfo?.plan === "lifetime"
+                          ? "Never Expires"
+                          : subInfo?.end_date
                           ? new Date(subInfo.end_date).toLocaleDateString()
                           : isPro
                           ? "Auto-renew"
@@ -1342,9 +1349,12 @@ export const SettingsPanel: React.FC<{
                           const start = subInfo?.start_date
                             ? new Date(subInfo.start_date).toLocaleDateString()
                             : "—";
-                          const end = subInfo?.end_date
-                            ? new Date(subInfo.end_date).toLocaleDateString()
-                            : "—";
+                          const end =
+                            subInfo?.plan === "lifetime"
+                              ? "Forever"
+                              : subInfo?.end_date
+                              ? new Date(subInfo.end_date).toLocaleDateString()
+                              : "—";
                           const email = _userEmail || "—";
                           // Create a more robust invoice generation approach
                           const html = `<!doctype html>

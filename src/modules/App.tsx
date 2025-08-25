@@ -326,7 +326,7 @@ export const App: React.FC = () => {
                 if (isPro) {
                   navigate("/settings?tab=subscription");
                 } else {
-                  navigate("/");
+                  navigate("/home");
                   // Wait for navigation then scroll to pricing
                   setTimeout(() => {
                     const pricingElement = document.getElementById("pricing");
@@ -674,15 +674,15 @@ export const App: React.FC = () => {
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsPanelLazy
-            onClose={() => navigate("/app")}
+            onClose={() => navigate("/dashboard")}
             userEmail={authUser?.email || null}
             userId={authUser?.id || null}
             onReset={() => resetCurrentUserData()}
             onLogout={() => {
-              logout();
               setFocusMode(false);
               setAutoFocusApplied(false);
-              navigate("/login", { replace: true });
+              logout();
+              window.location.replace("/home");
             }}
             onSyncNow={() => {
               try {

@@ -13,7 +13,7 @@ export const ProUpgradePrompt: React.FC<ProUpgradePromptProps> = ({
   const navigate = useNavigate();
 
   const handleUpgrade = () => {
-    navigate("/");
+    navigate("/home");
     // Wait for navigation then scroll to pricing
     setTimeout(() => {
       const pricingElement = document.getElementById("pricing");

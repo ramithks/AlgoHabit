@@ -23,7 +23,7 @@ export const SignupScreen: React.FC = () => {
         return;
       }
       // If no email confirmation required, redirect to app
-      navigate("/app", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(err.message || "Signup failed");
     } finally {

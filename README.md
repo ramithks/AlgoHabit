@@ -2,7 +2,7 @@
 
 Focused habit & progress companion for an 8‑week DSA roadmap. Tracks topics, streaks, XP, reviews, and focus sessions.
 
-Live App: https://ramithks.github.io/AlgoHabit/
+Live App: https://ramithks.github.io/
 Cheat Sheet (printable PDF included in repo)
 
 ## Features

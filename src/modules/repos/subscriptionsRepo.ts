@@ -27,12 +27,7 @@ export type ActiveSubscription = {
 let proCache: { uid: string; value: boolean; ts: number } | null = null;
 
 export async function fetchProStatus(userId: string): Promise<boolean> {
-  // TEMPORARY: Manual override for testing - remove this in production
-  const manualOverride = localStorage.getItem("dsa-manual-pro-override");
-  if (manualOverride === "true") {
-    console.log("fetchProStatus: Using manual override - returning true");
-    return true;
-  }
+
   
   if (
     proCache &&
@@ -59,7 +54,14 @@ export async function fetchProStatus(userId: string): Promise<boolean> {
       const subscription = await fetchActiveSubscription(userId);
       const isPro = subscription !== null && subscription.status === "active";
       
-      console.log("fetchProStatus: Fallback result", { subscription, isPro });
+      console.log("fetchProStatus: Fallback result", { 
+        subscription, 
+        isPro,
+        plan: subscription?.plan,
+        plan_label: subscription?.plan_label,
+        end_date: subscription?.end_date,
+        is_lifetime: subscription?.plan === 'lifetime'
+      });
       
       proCache = { uid: userId, value: isPro, ts: Date.now() };
       return isPro;
@@ -79,7 +81,14 @@ export async function fetchProStatus(userId: string): Promise<boolean> {
       const subscription = await fetchActiveSubscription(userId);
       const isPro = subscription !== null && subscription.status === "active";
       
-      console.log("fetchProStatus: Fallback result after exception", { subscription, isPro });
+      console.log("fetchProStatus: Fallback result after exception", { 
+        subscription, 
+        isPro,
+        plan: subscription?.plan,
+        plan_label: subscription?.plan_label,
+        end_date: subscription?.end_date,
+        is_lifetime: subscription?.plan === 'lifetime'
+      });
       
       proCache = { uid: userId, value: isPro, ts: Date.now() };
       return isPro;
@@ -104,6 +113,18 @@ export async function fetchActiveSubscription(
       console.warn("v_active_subscriptions error", error);
       return null;
     }
+    
+    console.log("fetchActiveSubscription: result", { 
+      userId, 
+      data, 
+      error,
+      plan: data?.plan,
+      plan_label: data?.plan_label,
+      end_date: data?.end_date,
+      status: data?.status,
+      is_active: data?.is_active
+    });
+    
     return (data as ActiveSubscription) || null;
   } catch (e) {
     // eslint-disable-next-line no-console

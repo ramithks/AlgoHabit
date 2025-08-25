@@ -102,7 +102,8 @@ const AuthRedirect: React.FC = () => {
 const RootApp: React.FC = () => (
   <BrowserRouter basename={import.meta.env.BASE_URL}>
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/home" element={<LandingPage />} />
+      <Route path="/" element={<Navigate to="/home" replace />} />
 
       {/* Authentication Routes */}
       <Route path="/login" element={<LoginScreen />} />
@@ -121,7 +122,7 @@ const RootApp: React.FC = () => (
 
       {/* Main App - Pro users only */}
       <Route
-        path="/app"
+        path="/dashboard"
         element={
           <ProtectedPro>
             <App />
@@ -141,7 +142,10 @@ const RootApp: React.FC = () => (
 
       {/* Public Routes */}
       <Route path="/u/:username" element={<PublicProfilePage />} />
-      <Route path="/pricing" element={<Navigate to="/#pricing" replace />} />
+      <Route
+        path="/pricing"
+        element={<Navigate to="/home#pricing" replace />}
+      />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/refunds" element={<RefundsPage />} />
@@ -149,7 +153,7 @@ const RootApp: React.FC = () => (
       <Route path="/contact" element={<ContactPage />} />
 
       {/* Default redirect */}
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   </BrowserRouter>
 );
