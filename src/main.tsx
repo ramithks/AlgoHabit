@@ -102,15 +102,26 @@ const AuthRedirect: React.FC = () => {
 const RootApp: React.FC = () => (
   <BrowserRouter basename={import.meta.env.BASE_URL}>
     <Routes>
+      {/* Public Routes - No authentication required */}
       <Route path="/home" element={<LandingPage />} />
       <Route path="/" element={<Navigate to="/home" replace />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/refunds" element={<RefundsPage />} />
+      <Route path="/shipping" element={<ShippingPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/u/:username" element={<PublicProfilePage />} />
+      <Route
+        path="/pricing"
+        element={<Navigate to="/home#pricing" replace />}
+      />
 
-      {/* Authentication Routes */}
+      {/* Authentication Routes - No Pro check required */}
       <Route path="/login" element={<LoginScreen />} />
       <Route path="/signup" element={<SignupScreen />} />
       <Route path="/auth" element={<AuthRedirect />} />
 
-      {/* Onboarding for new users */}
+      {/* Protected Routes - Authentication required */}
       <Route
         path="/onboarding"
         element={
@@ -120,7 +131,7 @@ const RootApp: React.FC = () => (
         }
       />
 
-      {/* Main App - Pro users only */}
+      {/* Pro Routes - Both authentication and Pro status required */}
       <Route
         path="/dashboard"
         element={
@@ -129,8 +140,6 @@ const RootApp: React.FC = () => (
           </ProtectedPro>
         }
       />
-
-      {/* Settings - Pro users only */}
       <Route
         path="/settings"
         element={
@@ -139,18 +148,6 @@ const RootApp: React.FC = () => (
           </ProtectedPro>
         }
       />
-
-      {/* Public Routes */}
-      <Route path="/u/:username" element={<PublicProfilePage />} />
-      <Route
-        path="/pricing"
-        element={<Navigate to="/home#pricing" replace />}
-      />
-      <Route path="/terms" element={<TermsPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/refunds" element={<RefundsPage />} />
-      <Route path="/shipping" element={<ShippingPage />} />
-      <Route path="/contact" element={<ContactPage />} />
 
       {/* Default redirect */}
       <Route path="*" element={<Navigate to="/home" replace />} />
