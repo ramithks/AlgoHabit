@@ -1,12 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { SUPPORT_EMAIL, COMPANY_ADDRESS, LAST_UPDATED } from "./constants";
 
 export const ContactPage: React.FC = () => {
-  const SUPPORT_EMAIL = "ramithgowdakundoor123@gmail.com";
-  const ADDRESS =
-    "Bettagere Village, Tekkur Post, Sringeri, Chikkamagaluru - 577139";
-  const LAST_UPDATED = "23 Aug 2025";
-
   return (
     <PageShell title="Contact Us">
       {/* Back to Home */}
@@ -99,7 +95,7 @@ export const ContactPage: React.FC = () => {
           </div>
           <div>
             <div className="text-gray-400">Address</div>
-            <div>{ADDRESS}</div>
+            <div>{COMPANY_ADDRESS}</div>
           </div>
           <div className="text-gray-500 text-xs">
             For billing queries, include your registered email and payment
