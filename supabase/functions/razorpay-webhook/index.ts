@@ -232,38 +232,104 @@ serve(async (req) => {
           user_id,
           plan_key,
         });
-        if (user_id) {
-          const { error: payErr } = await supabase
-            .from("subscription_payments")
+        if (user_id && plan_key) {
+          const end = planEndDate(plan_key);
+          const start = new Date();
+          
+          // Check existing subscriptions for this user
+          const { data: existingSubs, error: checkError } = await supabase
+            .from("subscriptions")
+            .select("id, status, plan_label")
+            .eq("user_id", user_id);
+            
+          if (checkError) {
+            console.error("webhook: check existing subs error", checkError);
+          } else {
+            console.log("webhook: existing subscriptions", { user_id, existingSubs });
+          }
+          
+          // First, deactivate any existing active subscriptions for this user
+          const { error: deactivateError } = await supabase
+            .from("subscriptions")
+            .update({ 
+              status: "inactive",
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", user_id)
+            .eq("status", "active");
+            
+          if (deactivateError) {
+            console.error("webhook: deactivate error", deactivateError);
+          }
+          
+          // Validate plan type
+          const planType = plan_key.replace("pro_", "");
+          console.log("webhook: plan details", { 
+            plan_key, 
+            planType, 
+            start_date: start.toISOString(), 
+            end_date: end ? end.toISOString() : null 
+          });
+          
+          // Then create the new active subscription
+          const { data: subData, error: subErr } = await supabase
+            .from("subscriptions")
             .insert({
               user_id,
-              amount_paise: p.amount,
-              currency: p.currency,
-              status: "success",
+              plan: planType as any,
+              plan_label: plan_key,
+              start_date: start.toISOString(),
+              end_date: end ? end.toISOString() : null,
+              status: "active",
               razorpay_order_id: p.order_id,
               razorpay_payment_id: p.id,
+              payment_state: "success",
+              amount_paise: p.amount,
+              currency: p.currency,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select("id")
+            .single();
+            
+          if (subErr) {
+            console.error("webhook: sub insert error", subErr);
+            console.error("webhook: sub insert details", {
+              user_id,
+              plan: plan_key.replace("pro_", ""),
+              plan_label: plan_key,
+              start_date: start.toISOString(),
+              end_date: end ? end.toISOString() : null,
+              status: "active",
+              razorpay_order_id: p.order_id,
+              razorpay_payment_id: p.id,
+              payment_state: "success",
+              amount_paise: p.amount,
+              currency: p.currency,
             });
-          if (payErr) console.error("webhook: pay insert error", payErr);
-
-          if (plan_key) {
-            const end = planEndDate(plan_key);
-            const start = new Date();
-            const { error: subErr } = await supabase
-              .from("subscriptions")
+          } else if (subData?.id) {
+            console.log("webhook: subscription created successfully", { subscription_id: subData.id });
+            
+            // Then, create the payment record with the subscription_id
+            const { error: payErr } = await supabase
+              .from("subscription_payments")
               .insert({
+                subscription_id: subData.id,
                 user_id,
-                plan: plan_key.replace("pro_", "") as any,
-                plan_label: plan_key,
-                start_date: start.toISOString(),
-                end_date: end ? end.toISOString() : null,
-                status: "active",
-                razorpay_order_id: p.order_id,
-                razorpay_payment_id: p.id,
-                payment_state: "success",
                 amount_paise: p.amount,
                 currency: p.currency,
+                status: "success",
+                razorpay_order_id: p.order_id,
+                razorpay_payment_id: p.id,
+                paid_at: new Date().toISOString(),
               });
-            if (subErr) console.error("webhook: sub insert error", subErr);
+            if (payErr) {
+              console.error("webhook: pay insert error", payErr);
+            } else {
+              console.log("webhook: payment record created successfully");
+            }
+          } else {
+            console.error("webhook: no subscription data returned after insert");
           }
         }
         break;
@@ -278,15 +344,18 @@ serve(async (req) => {
           user_id,
         });
         if (user_id) {
+          // For failed payments, we don't create a subscription, just log the payment attempt
           const { error: payErr } = await supabase
             .from("subscription_payments")
             .insert({
+              subscription_id: null, // No subscription for failed payments
               user_id,
               amount_paise: p.amount,
               currency: p.currency,
               status: "failed",
               razorpay_order_id: p.order_id,
               razorpay_payment_id: p.id,
+              paid_at: null,
             });
           if (payErr) console.error("webhook: pay insert error", payErr);
         }

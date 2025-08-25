@@ -1,0 +1,63 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background Circle -->
+    <circle cx="60" cy="60" r="58" fill="url(#gradient-bg)" stroke="url(#gradient-stroke)" stroke-width="2" />
+
+    <!-- Algorithm/Code Symbol -->
+    <g transform="translate(30, 25)">
+        <!-- Code brackets -->
+        <path d="M15 35 L25 35 L25 45 L15 45 M45 35 L55 35 L55 45 L45 45" stroke="white" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" />
+
+        <!-- Code lines -->
+        <line x1="20" y1="40" x2="40" y2="40" stroke="white" stroke-width="2" opacity="0.8" />
+        <line x1="20" y1="35" x2="35" y2="35" stroke="white" stroke-width="2" opacity="0.6" />
+        <line x1="20" y1="45" x2="42" y2="45" stroke="white" stroke-width="2" opacity="0.7" />
+
+        <!-- Binary dots -->
+        <circle cx="20" cy="30" r="2" fill="white" opacity="0.9" />
+        <circle cx="25" cy="30" r="2" fill="white" opacity="0.6" />
+        <circle cx="30" cy="30" r="2" fill="white" opacity="0.9" />
+        <circle cx="35" cy="30" r="2" fill="white" opacity="0.6" />
+
+        <circle cx="20" cy="50" r="2" fill="white" opacity="0.7" />
+        <circle cx="25" cy="50" r="2" fill="white" opacity="0.9" />
+        <circle cx="30" cy="50" r="2" fill="white" opacity="0.6" />
+        <circle cx="35" cy="50" r="2" fill="white" opacity="0.8" />
+    </g>
+
+    <!-- Growth/Progress Arrow -->
+    <g transform="translate(60, 60)">
+        <path d="M-15 -20 L15 -20 L0 -35 M15 -20 L15 -15 L20 -20 L15 -25" stroke="white" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+        <!-- Progress dots -->
+        <circle cx="-10" cy="-15" r="1.5" fill="white" opacity="0.8" />
+        <circle cx="-5" cy="-15" r="1.5" fill="white" opacity="0.9" />
+        <circle cx="0" cy="-15" r="1.5" fill="white" opacity="1" />
+        <circle cx="5" cy="-15" r="1.5" fill="white" opacity="0.9" />
+        <circle cx="10" cy="-15" r="1.5" fill="white" opacity="0.8" />
+    </g>
+
+    <!-- Brain/Intelligence Symbol -->
+    <g transform="translate(60, 75)">
+        <path d="M-12 0 Q-8 -8 0 -8 Q8 -8 12 0 Q8 8 0 8 Q-8 8 -12 0 Z" stroke="white" stroke-width="2" fill="none"
+            opacity="0.8" />
+        <path d="M-8 -2 Q-4 -6 0 -6 Q4 -6 8 -2" stroke="white" stroke-width="1.5" fill="none" opacity="0.6" />
+        <path d="M-6 2 Q-3 6 0 6 Q3 6 6 2" stroke="white" stroke-width="1.5" fill="none" opacity="0.6" />
+    </g>
+
+    <!-- Gradients -->
+    <defs>
+        <linearGradient id="gradient-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#fbbf24;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#fde68a;stop-opacity:1" />
+        </linearGradient>
+
+        <linearGradient id="gradient-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#92400e;stop-opacity:0.8" />
+            <stop offset="100%" style="stop-color:#78350f;stop-opacity:0.8" />
+        </linearGradient>
+    </defs>
+</svg>
+

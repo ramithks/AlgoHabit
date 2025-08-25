@@ -16,7 +16,6 @@ import {
   Timeline,
   WeekBoard,
   NotificationPanel,
-  AuthScreen,
   StatusCluster,
 } from "./components";
 import { FocusClock } from "./components/FocusClock";
@@ -86,9 +85,6 @@ export const App: React.FC = () => {
   const [lastXP, setLastXP] = useState(0);
   const [xpDelta, setXpDelta] = useState<number | null>(null);
   const [_levelPulse, setLevelPulse] = useState(false);
-  const [authUser, setAuthUser] = useState<ReturnType<typeof getActiveUser>>(
-    () => getActiveUser()
-  );
   const [showSettings, setShowSettings] = useState(false);
   const [autoFocusApplied, setAutoFocusApplied] = useState(false);
   const [prefFocusDefault, setPrefFocusDefault] = useState(
@@ -291,9 +287,25 @@ export const App: React.FC = () => {
   }, [achievements]);
 
   // Call useProStatus unconditionally at top-level to satisfy hooks rule.
-  const { isPro } = useProStatus();
+  const { isPro, subInfo } = useProStatus();
+  const cadenceLabel = (() => {
+    const map: Record<string, string> = {
+      weekly: "Weekly",
+      monthly: "Monthly",
+      quarterly: "Quarterly",
+      semiannual: "Semi-Annual",
+      yearly: "Yearly",
+      biennial: "2-Year",
+      lifetime: "Lifetime",
+    };
+    const p = (subInfo as any)?.plan as string | undefined;
+    return p && map[p] ? map[p] : null;
+  })();
+  const [showProCard, setShowProCard] = useState(false);
+  // User authentication is now handled by the router
+  const authUser = getActiveUser();
   if (!authUser) {
-    return <AuthScreen onAuthed={(u: any) => setAuthUser(u)} />;
+    return null; // This should never happen due to ProtectedPro wrapper
   }
   return (
     <div
@@ -309,16 +321,51 @@ export const App: React.FC = () => {
             <span className="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-400 font-normal">
               beta
             </span>
-            {isPro ? (
-              <span className="badge badge-accent">Pro</span>
-            ) : (
-              <button
-                className="btn btn-primary text-[11px] !px-3 !py-1.5 hidden sm:inline-flex"
-                onClick={() => navigate("/#pricing")}
-              >
-                Upgrade
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (isPro) {
+                  navigate("/settings?tab=subscription");
+                } else {
+                  navigate("/");
+                  // Wait for navigation then scroll to pricing
+                  setTimeout(() => {
+                    const pricingElement = document.getElementById("pricing");
+                    if (pricingElement) {
+                      pricingElement.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }
+                  }, 100);
+                }
+              }}
+              title={isPro ? "Manage subscription" : "Upgrade to Pro"}
+              className={`relative inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full ring-1 transition ${
+                isPro
+                  ? "ring-amber-400/50 text-amber-200 bg-gradient-to-r from-amber-600/15 via-yellow-500/10 to-amber-600/15 hover:from-amber-600/25 hover:via-yellow-500/20 hover:to-amber-600/25"
+                  : "ring-amber-400/40 text-amber-200 bg-transparent hover:bg-amber-500/10"
+              }`}
+            >
+              <span className="relative inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 shadow-[0_0_0_1px_rgba(251,191,36,0.45)]">
+                <span className="text-[8px] leading-none">◆</span>
+              </span>
+              {isPro ? (
+                <span className="flex items-center gap-1">
+                  <span className="text-[11px] font-semibold tracking-tight">
+                    Pro
+                  </span>
+                  {cadenceLabel && (
+                    <span className="hidden sm:inline text-[9px] text-amber-200/80 font-normal">
+                      ({cadenceLabel})
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold tracking-tight">
+                  Get Pro
+                </span>
+              )}
+            </button>
           </div>
           <div className="hidden md:block text-sm text-gray-400 order-3 sm:order-none">
             Week <span className="text-gray-200 font-medium">{activeWeek}</span>{" "}
@@ -411,6 +458,10 @@ export const App: React.FC = () => {
         </div>
         <div className="flex flex-col gap-6 focus-core min-w-0 w-full max-w-3xl mx-auto">
           <FocusClock />
+
+          {/* Non-Pro users should be redirected to onboarding by the router */}
+          {/* This component should never render for non-Pro users */}
+
           {!focusMode && (
             <div className="xl:hidden">
               <Suspense fallback={null}>
@@ -629,10 +680,9 @@ export const App: React.FC = () => {
             onReset={() => resetCurrentUserData()}
             onLogout={() => {
               logout();
-              setAuthUser(null);
               setFocusMode(false);
               setAutoFocusApplied(false);
-              navigate("/auth", { replace: true });
+              navigate("/login", { replace: true });
             }}
             onSyncNow={() => {
               try {

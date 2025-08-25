@@ -119,19 +119,27 @@ serve(async (req) => {
       end = new Date(start);
       end.setDate(end.getDate() + dur.days);
     }
-    await supabase.from("subscriptions").insert({
-      user_id,
-      plan: plan_key.replace("pro_", "") as any,
-      plan_label: plan_key,
-      start_date: start.toISOString(),
-      end_date: end ? end.toISOString() : null,
-      status: "active",
-      razorpay_order_id: order_id,
-      razorpay_payment_id: payment_id,
-      payment_state: "success",
-      amount_paise: amount_paise || null,
-      currency: "INR",
-    });
+
+    // Use upsert to prevent duplicate subscriptions
+    await supabase.from("subscriptions").upsert(
+      {
+        user_id,
+        plan: plan_key.replace("pro_", "") as any,
+        plan_label: plan_key,
+        start_date: start.toISOString(),
+        end_date: end ? end.toISOString() : null,
+        status: "active",
+        razorpay_order_id: order_id,
+        razorpay_payment_id: payment_id,
+        payment_state: "success",
+        amount_paise: amount_paise || null,
+        currency: "INR",
+      },
+      {
+        onConflict: "user_id,status",
+        ignoreDuplicates: false,
+      }
+    );
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json", ...corsHeaders },

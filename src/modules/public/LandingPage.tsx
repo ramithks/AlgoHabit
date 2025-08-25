@@ -1,9 +1,10 @@
-import React, { Suspense, lazy } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { Suspense, lazy, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { getActiveUser } from "../localAuth";
 import { plans as _plans } from "../payments/plans";
 import { openCheckout } from "../payments/razorpay";
 import { useState } from "react";
+import { fetchProStatus } from "../repos/subscriptionsRepo";
 const StreakHeatmapLazy = lazy(() =>
   import("../components/StreakHeatmap").then((m) => ({
     default: m.StreakHeatmap,
@@ -219,6 +220,15 @@ const PlanArea: React.FC<{
   const start = async () => {
     if (!user) return window.location.assign("/auth");
     try {
+      // Show loading state
+      const button = document.querySelector(
+        `[data-plan="${p.key}"] button`
+      ) as HTMLButtonElement;
+      if (button) {
+        button.textContent = "Processing...";
+        button.disabled = true;
+      }
+
       await openCheckout({
         amountPaise: p.pricePaise,
         name: p.title,
@@ -226,13 +236,54 @@ const PlanArea: React.FC<{
         plan_key: p.key,
         user_id: user.id,
       });
-      window.location.assign("/app");
-    } catch {}
+
+      // Show success message
+      const el = document.createElement("div");
+      el.className =
+        "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-3 rounded-lg bg-emerald-600 text-white font-medium shadow-lg";
+      el.textContent =
+        "Payment opened! Complete payment to activate your Pro plan.";
+      document.body.appendChild(el);
+      setTimeout(() => {
+        try {
+          el.remove();
+        } catch {}
+      }, 5000);
+
+      // Don't redirect immediately - let the webhook handle the subscription update
+      // The user will be redirected after successful payment via the webhook
+    } catch (error) {
+      console.error("Checkout error:", error);
+
+      // Show error message
+      const el = document.createElement("div");
+      el.className =
+        "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-3 rounded-lg bg-red-600 text-white font-medium shadow-lg";
+      el.textContent = `Payment failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`;
+      document.body.appendChild(el);
+      setTimeout(() => {
+        try {
+          el.remove();
+        } catch {}
+      }, 5000);
+
+      // Reset button
+      const button = document.querySelector(
+        `[data-plan="${p.key}"] button`
+      ) as HTMLButtonElement;
+      if (button) {
+        button.textContent = "🚀 Upgrade to Pro";
+        button.disabled = false;
+      }
+    }
   };
 
   return (
     <div
       key={p.key} // Force re-render for animation
+      data-plan={p.key}
       className="panel-interactive relative p-4 sm:p-6 shadow-2xl rounded-2xl bg-gradient-to-br from-gray-900/80 to-gray-950/90 ring-1 ring-gray-800 transform transition-all duration-500 ml-0 sm:ml-4 flex flex-col animate-in slide-in-from-left-2 fade-in-0"
       style={{ height: "calc(3 * 160px + 1 * 32px + 40px)" }} // Height: 3 small cards (160px each) + 2 gaps (32px each for gap-8) + reduced extra space for features
     >
@@ -295,6 +346,7 @@ const PlanArea: React.FC<{
           className="group relative w-full h-14 bg-gradient-to-r from-accent via-accentMuted to-purple-500 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
           onClick={start}
           aria-label={`Subscribe to ${p.title}`}
+          data-plan={p.key}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-accent/80 via-accentMuted/80 to-purple-500/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <div className="relative flex items-center justify-center gap-2">
@@ -436,6 +488,7 @@ const SmallPlansGridWrapper: React.FC<{
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = getActiveUser();
   const [selectedKey, setSelectedKey] = React.useState<string>(() => {
     // prefer a plan marked as best, fallback to yearly or first
@@ -446,6 +499,38 @@ export const LandingPage: React.FC = () => {
       ""
     );
   });
+
+  // Handle post-email-confirmation redirects
+  React.useEffect(() => {
+    // Check if user is coming back after email confirmation
+    if (user && location.search.includes("confirmed=true")) {
+      // Clear the query parameter and redirect to onboarding for new users
+      navigate("/onboarding", { replace: true });
+    }
+  }, [user, location.search, navigate]);
+
+  // Check Pro status and redirect if user becomes Pro
+  React.useEffect(() => {
+    const checkProStatus = async () => {
+      try {
+        if (user) {
+          const isPro = await fetchProStatus(user.id);
+          if (isPro) {
+            console.log("User is Pro, redirecting to app");
+            navigate("/app");
+          }
+        }
+      } catch (error) {
+        console.error("Error checking Pro status:", error);
+      }
+    };
+
+    // Check immediately and then every 5 seconds
+    checkProStatus();
+    const interval = setInterval(checkProStatus, 5000);
+
+    return () => clearInterval(interval);
+  }, [user, navigate]);
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);

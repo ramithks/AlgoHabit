@@ -5,8 +5,12 @@ import {
   getProfileByUsername,
 } from "../repos/profilesRepo";
 import { supabase } from "../../lib/supabaseClient";
+import { useProStatus } from "../hooks/useProStatus";
+import { COMPANY_ADDRESS } from "../public/legal/constants";
+import { getActiveUser } from "../localAuth";
+import { changePlan } from "../repos/subscriptionsRepo";
 
-type TabKey = "general" | "preferences" | "data" | "about";
+type TabKey = "general" | "preferences" | "data" | "about" | "subscription";
 
 export const SettingsPanel: React.FC<{
   onClose: () => void;
@@ -87,6 +91,16 @@ export const SettingsPanel: React.FC<{
   }, []);
   const [confirming, setConfirming] = React.useState(false);
   const [tab, setTab] = React.useState<TabKey>("general");
+  const { isPro, loading: proLoading, subInfo } = useProStatus();
+
+  // Open specific tab via URL ?tab=subscription
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const t = (params.get("tab") || "").toLowerCase();
+      if (t === "subscription") setTab("subscription");
+    } catch {}
+  }, []);
   const [resetText, setResetText] = React.useState("");
   const [fullName, setFullName] = React.useState("");
   const [username, setUsername] = React.useState("");
@@ -273,6 +287,225 @@ export const SettingsPanel: React.FC<{
   const done = statsSummary.complete;
   const total = statsSummary.total;
   const rate = total > 0 ? Math.round((done / total) * 100) : 0;
+  const formatINR = (p: number | null | undefined) => {
+    try {
+      const num = (p || 0) / 100;
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 2,
+      }).format(num);
+    } catch {
+      return `₹${((p || 0) / 100).toFixed(2)}`;
+    }
+  };
+
+  // Plan selector UI using real plan data
+  const PlanSelector: React.FC<{ isPro: boolean }> = ({ isPro }) => {
+    const [open, setOpen] = React.useState(false);
+    const [selected, setSelected] = React.useState<string>("");
+
+    // Import plans dynamically to avoid circular dependencies
+    const [plans, setPlans] = React.useState<any[]>([]);
+    const [plansLoading, setPlansLoading] = React.useState(true);
+
+    React.useEffect(() => {
+      import("../payments/plans")
+        .then(({ plans: planData }) => {
+          setPlans(planData);
+          setPlansLoading(false);
+        })
+        .catch(() => {
+          setPlansLoading(false);
+        });
+    }, []);
+
+    // Get current plan info
+    const currentPlan = (subInfo?.plan as string) || "";
+    const currentPlanData =
+      plans.find((p) => p.key === `pro_${currentPlan}`) ||
+      plans.find((p) => p.key === currentPlan);
+
+    // Filter plans to show only upgrade options (higher value plans)
+    const upgradePlans = plans.filter((plan) => {
+      if (!currentPlanData) return true; // If no current plan, show all
+      return plan.pricePaise > currentPlanData.pricePaise;
+    });
+
+    // Format price display
+    const formatPrice = (paise: number) => {
+      return `₹${(paise / 100).toLocaleString("en-IN")}`;
+    };
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={`text-[11px] px-3 py-1.5 rounded border ${
+            isPro
+              ? "bg-gray-700/60 text-gray-200 hover:bg-gray-700 border-gray-600/60"
+              : "bg-accent/20 text-accent hover:bg-accent/30 border-accent/40"
+          }`}
+        >
+          {isPro ? "Manage Plan" : "Upgrade Plan"}
+        </button>
+        {open && (
+          <div className="absolute right-0 mt-2 w-64 z-40 bg-gray-900 rounded-lg ring-1 ring-gray-800 shadow-xl p-2">
+            {/* Current Plan Display */}
+            {currentPlanData && (
+              <div className="text-[11px] text-gray-300 mb-2 p-2 bg-gray-800/50 rounded border border-gray-700">
+                <div className="font-medium">
+                  Current Plan: {currentPlanData.title}
+                </div>
+                <div className="text-gray-400">
+                  {formatPrice(currentPlanData.pricePaise)}
+                </div>
+              </div>
+            )}
+
+            <div className="text-[11px] text-gray-400 mb-1">Select a plan</div>
+            {plansLoading ? (
+              <div className="text-[11px] text-gray-500 p-2 text-center">
+                Loading plans...
+              </div>
+            ) : upgradePlans.length === 0 ? (
+              <div className="text-[11px] text-gray-500 p-2 text-center">
+                You're already on the highest tier plan! 🎉
+              </div>
+            ) : (
+              <ul className="text-[12px] text-gray-200 space-y-1">
+                {upgradePlans.map((plan) => (
+                  <li key={plan.key}>
+                    <button
+                      onClick={() => setSelected(plan.key)}
+                      className={`w-full text-left px-2 py-1 rounded ${
+                        selected === plan.key
+                          ? "bg-accent/20 text-accent"
+                          : "hover:bg-gray-800"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span>{plan.title}</span>
+                        <span className="text-accent/80">
+                          {formatPrice(plan.pricePaise)}
+                        </span>
+                      </div>
+                      {plan.discountPercent && (
+                        <div className="text-[10px] text-green-400">
+                          Save {plan.discountPercent}%
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => setOpen(false)}
+                className="flex-1 text-[11px] px-2 py-1.5 rounded bg-gray-700/60 text-gray-200 hover:bg-gray-700 border border-gray-600/60"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!selected}
+                onClick={async () => {
+                  if (!selected) return;
+                  setOpen(false);
+                  try {
+                    const uid = getActiveUser()?.id;
+                    if (!uid) return;
+
+                    // Extract plan name from plan key (e.g., "pro_monthly" -> "monthly")
+                    const planName = selected.replace("pro_", "");
+                    console.log("=== UPGRADE PROCESS DEBUG ===");
+                    console.log("User ID:", uid);
+                    console.log("Selected plan key:", selected);
+                    console.log("Extracted plan name:", planName);
+                    console.log("Current plan:", currentPlanData);
+
+                    // Import and test changePlan function
+                    try {
+                      const { changePlan } = await import(
+                        "../repos/subscriptionsRepo"
+                      );
+                      console.log("changePlan function imported successfully");
+
+                      const ok = await changePlan(uid, planName as any);
+                      console.log("changePlan returned:", ok);
+
+                      if (ok) {
+                        const el = document.createElement("div");
+                        el.className =
+                          "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-emerald-200 ring-1 ring-emerald-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.6s]";
+                        el.textContent =
+                          "Payment opened! Complete payment to change plan.";
+                        document.body.appendChild(el);
+                        setTimeout(() => {
+                          try {
+                            el.remove();
+                          } catch {}
+                        }, 5000);
+
+                        // Refresh subscription data after a delay to show the change
+                        setTimeout(async () => {
+                          try {
+                            console.log("Refreshing subscription data...");
+                            // Force refresh of Pro status
+                            localStorage.removeItem("dsa-manual-pro-override");
+                            // Reload the page to show updated plan
+                            window.location.reload();
+                          } catch (refreshError) {
+                            console.error("Failed to refresh:", refreshError);
+                          }
+                        }, 10000); // Wait 10 seconds for payment to complete
+                      } else {
+                        console.error("changePlan returned false");
+                        // Show error message
+                        const el = document.createElement("div");
+                        el.className =
+                          "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-red-200 ring-1 ring-red-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.6s]";
+                        el.textContent = "Upgrade failed. Please try again.";
+                        document.body.appendChild(el);
+                        setTimeout(() => {
+                          try {
+                            el.remove();
+                          } catch {}
+                        }, 3000);
+                      }
+                    } catch (importError) {
+                      console.error(
+                        "Failed to import changePlan:",
+                        importError
+                      );
+                      throw importError;
+                    }
+                  } catch (error) {
+                    console.error("=== UPGRADE ERROR ===", error);
+                    // Show error message
+                    const el = document.createElement("div");
+                    el.className =
+                      "fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded bg-gray-900/90 text-[11px] text-red-200 ring-1 ring-red-700 animate-[fadeIn_.15s_ease,fadeOut_.3s_ease_1.6s]";
+                    el.textContent = `Upgrade failed: ${
+                      error instanceof Error ? error.message : "Unknown error"
+                    }`;
+                    document.body.appendChild(el);
+                    setTimeout(() => {
+                      try {
+                        el.remove();
+                      } catch {}
+                    }, 5000);
+                  }
+                }}
+                className="flex-1 text-[11px] px-2 py-1.5 rounded bg-accent/20 text-accent hover:bg-accent/30 border border-accent/40"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -325,6 +558,18 @@ export const SettingsPanel: React.FC<{
               </button>
             ))}
           </div>
+          <div className="mt-2">
+            <button
+              onClick={() => setTab("subscription")}
+              className={`w-full px-2 py-1 rounded border text-[11px] ${
+                tab === "subscription"
+                  ? "bg-accent/10 border-accent/40 text-accent"
+                  : "bg-gray-800/60 border-gray-700/60 text-gray-300 hover:border-gray-600"
+              }`}
+            >
+              Subscription
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -348,6 +593,13 @@ export const SettingsPanel: React.FC<{
             </TabBtn>
             <TabBtn active={tab === "about"} onClick={() => setTab("about")}>
               About
+            </TabBtn>
+            <div className="pt-1 mt-1 border-t border-gray-800" />
+            <TabBtn
+              active={tab === "subscription"}
+              onClick={() => setTab("subscription")}
+            >
+              Subscription
             </TabBtn>
           </aside>
 
@@ -915,6 +1167,601 @@ export const SettingsPanel: React.FC<{
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {tab === "subscription" && (
+              <div className="space-y-4">
+                <h3 className="text-xs uppercase tracking-wide text-gray-500">
+                  Subscription
+                </h3>
+                <div className="bg-gray-800/40 rounded p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-gray-200 text-sm font-medium flex items-center gap-2">
+                        {isPro ? (
+                          <>
+                            <span>AlgoHabit Pro</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Active
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Free Plan</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300 border border-gray-600/60">
+                              Inactive
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-gray-500">
+                        {isPro
+                          ? "Enjoy all Pro features"
+                          : "Unlock Pro features"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <PlanSelector isPro={isPro} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Status</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {proLoading
+                          ? "Checking…"
+                          : isPro
+                          ? "Pro Active"
+                          : "Free"}
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Renewal</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {subInfo?.end_date
+                          ? new Date(subInfo.end_date).toLocaleDateString()
+                          : isPro
+                          ? "Auto-renew"
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Plan</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {(() => {
+                          const map: Record<string, string> = {
+                            weekly: "Pro Weekly",
+                            monthly: "Pro Monthly",
+                            quarterly: "Pro Quarterly",
+                            semiannual: "Pro Semi-Annual",
+                            yearly: "Pro Yearly",
+                            biennial: "Pro 2-Year",
+                            lifetime: "Pro Lifetime",
+                          };
+                          const p = (subInfo?.plan as string) || "";
+                          if (p && map[p]) return map[p];
+                          const lbl = (subInfo?.plan_label as string) || "";
+                          if (lbl.startsWith("pro_")) {
+                            const pretty = lbl.replace("pro_", "");
+                            return `Pro ${pretty
+                              .charAt(0)
+                              .toUpperCase()}${pretty.slice(1)}`;
+                          }
+                          return isPro ? "Pro" : "Free";
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  {isPro && (
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Days Remaining</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {(() => {
+                          if (!subInfo?.end_date) return "—";
+                          const end = new Date(subInfo.end_date).getTime();
+                          const now = Date.now();
+                          const days = Math.max(
+                            0,
+                            Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+                          );
+                          return `${days} day${days === 1 ? "" : "s"}`;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Payment Details */}
+                <div className="bg-gray-800/40 rounded p-4">
+                  <div className="text-[11px] text-gray-400 mb-2">
+                    Payment Details
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3 text-[11px] text-gray-300">
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Start Date</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {subInfo?.start_date
+                          ? new Date(subInfo.start_date).toLocaleDateString()
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Renewal Date</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {subInfo?.end_date
+                          ? new Date(subInfo.end_date).toLocaleDateString()
+                          : isPro
+                          ? "Auto-renew"
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Amount</div>
+                      <div className="text-gray-200 font-medium mt-0.5">
+                        {formatINR(subInfo?.amount_paise)}
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/40 rounded p-3 border border-gray-800/60">
+                      <div className="text-gray-500">Payment ID</div>
+                      <div
+                        className="text-gray-200 font-medium mt-0.5 truncate"
+                        title={subInfo?.razorpay_payment_id || undefined}
+                      >
+                        {subInfo?.razorpay_payment_id || "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      onClick={() => {
+                        try {
+                          const invId =
+                            subInfo?.razorpay_payment_id ||
+                            subInfo?.id ||
+                            "invoice";
+                          const planLbl = (() => {
+                            const map: Record<string, string> = {
+                              weekly: "Pro Weekly",
+                              monthly: "Pro Monthly",
+                              quarterly: "Pro Quarterly",
+                              semiannual: "Pro Semi-Annual",
+                              yearly: "Pro Yearly",
+                              biennial: "Pro 2-Year",
+                              lifetime: "Pro Lifetime",
+                            };
+                            const p = subInfo?.plan as any as
+                              | string
+                              | undefined;
+                            return (
+                              (p && map[p]) ||
+                              subInfo?.plan_label ||
+                              "AlgoHabit Pro"
+                            );
+                          })();
+                          const amount = formatINR(subInfo?.amount_paise);
+                          const start = subInfo?.start_date
+                            ? new Date(subInfo.start_date).toLocaleDateString()
+                            : "—";
+                          const end = subInfo?.end_date
+                            ? new Date(subInfo.end_date).toLocaleDateString()
+                            : "—";
+                          const email = _userEmail || "—";
+                          // Create a more robust invoice generation approach
+                          const html = `<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+  <title>Invoice ${invId}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif;
+      background: #ffffff;
+      color: #1f2937;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    
+    .invoice-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background: #ffffff;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .company-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #f59e0b, #fbbf24);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #92400e;
+      font-weight: 700;
+      font-size: 20px;
+    }
+    
+    .company-details h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    
+    .company-details p {
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    
+    .invoice-badge {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .invoice-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+    
+    .detail-section h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .detail-section p {
+      font-size: 16px;
+      font-weight: 500;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    
+    .detail-section .secondary {
+      font-size: 14px;
+      color: #6b7280;
+      font-weight: 400;
+    }
+    
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+      background: #f9fafb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .items-table th {
+      background: #f3f4f6;
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .items-table td {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+    }
+    
+    .items-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .item-description {
+      font-weight: 500;
+      color: #111827;
+    }
+    
+    .item-amount {
+      font-weight: 600;
+      color: #111827;
+      text-align: right;
+    }
+    
+    .total-row {
+      background: #f8fafc;
+      border-top: 2px solid #e5e7eb;
+    }
+    
+    .total-row td {
+      font-weight: 700;
+      font-size: 16px;
+      color: #111827;
+    }
+    
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .payment-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-badge {
+      background: #10b981;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .terms {
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 30px;
+      padding: 20px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+    
+    .no-print {
+      display: none;
+    }
+    
+    @media print {
+      body { padding: 0; }
+      .invoice-container { padding: 0; }
+      .header { border-bottom: 1px solid #000; }
+      .items-table { background: white; }
+      .total-row { background: #f0f0f0; }
+    }
+  </style>
+</head>
+<body>
+  <div class='invoice-container'>
+    <!-- Header -->
+    <div class='header'>
+      <div class='company-info'>
+        <div class='logo'>A</div>
+        <div class='company-details'>
+          <h1>AlgoHabit</h1>
+          <p>${COMPANY_ADDRESS}</p>
+        </div>
+      </div>
+      <div class='invoice-badge'>Invoice</div>
+    </div>
+    
+    <!-- Invoice Details -->
+    <div class='invoice-details'>
+      <div class='detail-section'>
+        <h3>Invoice Details</h3>
+        <p><strong>Invoice #:</strong> ${invId}</p>
+        <p><strong>Issue Date:</strong> ${start}</p>
+        <p><strong>Due Date:</strong> ${end}</p>
+      </div>
+      
+      <div class='detail-section'>
+        <h3>Bill To</h3>
+        <p>${email}</p>
+        <p class='secondary'>Customer</p>
+      </div>
+    </div>
+    
+    <!-- Subscription Details -->
+    <div class='invoice-details'>
+      <div class='detail-section'>
+        <h3>Subscription Plan</h3>
+        <p><strong>Plan:</strong> ${planLbl}</p>
+        <p><strong>Period:</strong> ${start} - ${end}</p>
+      </div>
+      
+      <div class='detail-section'>
+        <h3>Payment Information</h3>
+        <p><strong>Payment ID:</strong> ${
+          subInfo?.razorpay_payment_id || "—"
+        }</p>
+        <p><strong>Status:</strong> ${subInfo?.payment_state || "Paid"}</p>
+      </div>
+    </div>
+    
+    <!-- Items Table -->
+    <table class='items-table'>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th style='text-align: right;'>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class='item-description'>
+            <strong>${planLbl} Subscription</strong><br>
+            <span style='color: #6b7280; font-size: 12px;'>Subscription period from ${start} to ${end}</span>
+          </td>
+          <td class='item-amount'>${amount}</td>
+        </tr>
+        <tr class='total-row'>
+          <td class='item-description'>Total Amount</td>
+          <td class='item-amount'>${amount}</td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <!-- Footer -->
+    <div class='footer'>
+      <div class='payment-status'>
+        <span class='status-badge'>Paid</span>
+        <span style='color: #6b7280; font-size: 14px;'>Payment completed successfully</span>
+      </div>
+      
+      <div style='text-align: right;'>
+        <p style='font-size: 12px; color: #6b7280; margin-bottom: 4px;'>Thank you for choosing AlgoHabit!</p>
+        <p style='font-size: 12px; color: #6b7280;'>For support, contact: ramithgowdakundoor123@gmail.com</p>
+      </div>
+    </div>
+    
+    <!-- Terms -->
+    <div class='terms'>
+      <p><strong>Terms & Conditions:</strong> This is a digital invoice. Payment is non-refundable. Subscription will auto-renew unless cancelled.</p>
+    </div>
+    
+    <!-- Action Buttons (Hidden in print) -->
+    <div style='margin-top: 30px; text-align: center;' class='no-print'>
+      <button onclick='window.print()' style='padding: 12px 24px; border: none; background: #10b981; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin-right: 12px;'>Print Invoice</button>
+      <button onclick='window.close()' style='padding: 12px 24px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;'>Close</button>
+    </div>
+  </div>
+</body>
+</html>`;
+
+                          // Generate PDF using jsPDF and html2canvas
+                          try {
+                            // Create a temporary div to render the invoice
+                            const tempDiv = document.createElement("div");
+                            tempDiv.innerHTML = html;
+                            tempDiv.style.position = "absolute";
+                            tempDiv.style.left = "-9999px";
+                            tempDiv.style.top = "0";
+                            tempDiv.style.width = "760px";
+                            tempDiv.style.background = "#ffffff";
+                            document.body.appendChild(tempDiv);
+
+                            // Import jsPDF and html2canvas dynamically
+                            Promise.all([
+                              import("jspdf"),
+                              import("html2canvas"),
+                            ])
+                              .then(([jsPDF, html2canvas]) => {
+                                const { default: JsPDF } = jsPDF;
+                                const { default: Html2Canvas } = html2canvas;
+
+                                // Convert HTML to canvas
+                                Html2Canvas(tempDiv, {
+                                  scale: 2,
+                                  useCORS: true,
+                                  allowTaint: true,
+                                  backgroundColor: "#ffffff",
+                                  width: 760,
+                                  height: tempDiv.scrollHeight,
+                                })
+                                  .then((canvas) => {
+                                    // Create PDF
+                                    const pdf = new JsPDF("p", "mm", "a4");
+                                    const imgWidth = 210; // A4 width in mm
+                                    const pageHeight = 295; // A4 height in mm
+                                    const imgHeight =
+                                      (canvas.height * imgWidth) / canvas.width;
+                                    let heightLeft = imgHeight;
+                                    let position = 0;
+
+                                    // Add first page
+                                    pdf.addImage(
+                                      canvas,
+                                      "PNG",
+                                      0,
+                                      position,
+                                      imgWidth,
+                                      imgHeight
+                                    );
+                                    heightLeft -= pageHeight;
+
+                                    // Add additional pages if needed
+                                    while (heightLeft >= 0) {
+                                      position = heightLeft - imgHeight;
+                                      pdf.addPage();
+                                      pdf.addImage(
+                                        canvas,
+                                        "PNG",
+                                        0,
+                                        position,
+                                        imgWidth,
+                                        imgHeight
+                                      );
+                                      heightLeft -= pageHeight;
+                                    }
+
+                                    // Download PDF
+                                    pdf.save(`invoice-${invId}.pdf`);
+
+                                    // Clean up
+                                    document.body.removeChild(tempDiv);
+                                  })
+                                  .catch((err) => {
+                                    console.error(
+                                      "Canvas generation failed:",
+                                      err
+                                    );
+                                    alert(
+                                      "PDF generation failed. Please try again."
+                                    );
+                                    document.body.removeChild(tempDiv);
+                                  });
+                              })
+                              .catch((err) => {
+                                console.error(
+                                  "PDF library import failed:",
+                                  err
+                                );
+                                alert(
+                                  "PDF generation failed. Please try again."
+                                );
+                                document.body.removeChild(tempDiv);
+                              });
+                          } catch (e) {
+                            console.error("PDF generation failed:", e);
+                            alert("PDF generation failed. Please try again.");
+                          }
+                        } catch {}
+                      }}
+                      className="text-[11px] px-3 py-1.5 rounded border border-gray-600/60 text-gray-200 bg-gray-700/60 hover:bg-gray-700"
+                    >
+                      Download Invoice (PDF)
+                    </button>
+                  </div>
+                </div>
+                {/* Billing section intentionally removed per design */}
               </div>
             )}
           </section>

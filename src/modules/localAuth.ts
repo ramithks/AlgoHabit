@@ -72,6 +72,31 @@ export async function login(email: string, password: string) {
   return { id: uid || "", email } satisfies ActiveUser;
 }
 
+// Check if user needs to complete email confirmation
+export async function checkEmailConfirmation(email: string): Promise<boolean> {
+  try {
+    const supabase = getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && user.email === email) {
+      return user.email_confirmed_at !== null;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// Check if user should see onboarding
+export function shouldShowOnboarding(): boolean {
+  const hasSeenOnboarding = localStorage.getItem("dsa-onboarding-seen");
+  return !hasSeenOnboarding;
+}
+
+// Mark onboarding as completed
+export function markOnboardingComplete(): void {
+  localStorage.setItem("dsa-onboarding-seen", "true");
+}
+
 export async function logout() {
   const supabase = getSupabase();
   await supabase.auth.signOut();
