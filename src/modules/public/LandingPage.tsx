@@ -382,11 +382,25 @@ const PlanArea: React.FC<{
 const SmallPlansGridWrapper: React.FC<{
   selectedKey?: string;
   onSelect?: (k: string) => void;
-}> = ({ selectedKey, onSelect }) => {
+  navigate: (path: string, options?: any) => void;
+}> = ({ selectedKey, onSelect, navigate }) => {
   const user = getActiveUser();
 
   const handleBuy = async (p: (typeof _plans)[number]) => {
     if (!user) return window.location.assign("/auth");
+
+    // Check if user is already Pro
+    try {
+      const proStatus = await fetchProStatus(user.id);
+      if (proStatus) {
+        console.log("User is already Pro, redirecting to dashboard");
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking Pro status:", error);
+    }
+
     try {
       await openCheckout({
         amountPaise: p.pricePaise,
@@ -395,7 +409,7 @@ const SmallPlansGridWrapper: React.FC<{
         plan_key: p.key,
         user_id: user.id,
       });
-      window.location.assign("/app");
+      window.location.assign("/dashboard");
     } catch {}
   };
 
@@ -510,18 +524,32 @@ export const LandingPage: React.FC = () => {
   }, [user, location.search, navigate]);
 
   // Check Pro status and redirect if user becomes Pro
+  const [isPro, setIsPro] = React.useState<boolean>(false);
+  const [proCheckLoading, setProCheckLoading] = React.useState<boolean>(true);
+
   React.useEffect(() => {
     const checkProStatus = async () => {
       try {
         if (user) {
-          const isPro = await fetchProStatus(user.id);
-          if (isPro) {
-            console.log("User is Pro, redirecting to app");
-            navigate("/app");
+          setProCheckLoading(true);
+          const proStatus = await fetchProStatus(user.id);
+          setIsPro(proStatus);
+          if (proStatus) {
+            console.log("User is Pro, redirecting to dashboard");
+            navigate("/dashboard", { replace: true });
           }
+        } else {
+          setIsPro(false);
+          setProCheckLoading(false);
         }
       } catch (error) {
         console.error("Error checking Pro status:", error);
+        setIsPro(false);
+        setProCheckLoading(false);
+      } finally {
+        if (user) {
+          setProCheckLoading(false);
+        }
       }
     };
 
@@ -714,7 +742,7 @@ export const LandingPage: React.FC = () => {
             )}
             <button
               className="btn btn-primary text-[11px] hover:scale-105 transition-transform"
-              onClick={() => navigate(user ? "/app" : "/auth")}
+              onClick={() => navigate(user ? "/dashboard" : "/auth")}
             >
               {user ? "Continue" : "Get Started"}
             </button>
@@ -791,7 +819,7 @@ export const LandingPage: React.FC = () => {
               <button
                 className="btn btn-primary w-full"
                 onClick={() => {
-                  navigate(user ? "/app" : "/auth");
+                  navigate(user ? "/dashboard" : "/auth");
                   setIsMobileMenuOpen(false);
                 }}
               >
@@ -835,12 +863,12 @@ export const LandingPage: React.FC = () => {
               <div className="flex flex-wrap gap-3 pt-2 animate-in slide-in-from-bottom-2 duration-500 delay-600">
                 <button
                   className="btn btn-primary group relative overflow-hidden"
-                  onClick={() => navigate(user ? "/app" : "/auth")}
+                  onClick={() => navigate(user ? "/dashboard" : "/auth")}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-accent/80 to-purple-500/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <span className="relative flex items-center gap-2">
                     <span>🚀</span>
-                    {user ? "Open App" : "Start Now"}
+                    {user ? "Open Dashboard" : "Start Now"}
                   </span>
                 </button>
                 <button
@@ -1040,71 +1068,103 @@ export const LandingPage: React.FC = () => {
 
         {/* Pricing (revamped) - modern, minimal, responsive */}
         <section id="pricing" className="px-4 sm:px-6 pb-16 max-w-6xl mx-auto">
-          <h2 className="text-lg font-semibold text-gray-100 mb-2 text-left">
-            Pricing
-          </h2>
-          <div className="text-sm text-gray-400 mb-6 max-w-3xl text-left">
-            Build a consistent habit — pick a plan that fits your schedule.
-            Upgrade now and save with limited-time offers.
-          </div>
+          {proCheckLoading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-sm text-gray-400">
+                Checking subscription status...
+              </p>
+            </div>
+          ) : isPro ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 mx-auto bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+                <span className="text-2xl">🎉</span>
+              </div>
+              <h2 className="text-xl font-semibold text-green-200 mb-2">
+                You're Already Pro!
+              </h2>
+              <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                You have an active Pro subscription. Enjoy all the features!
+              </p>
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="px-6 py-3 bg-accent hover:bg-accent/80 text-white font-semibold rounded-lg transition-colors"
+              >
+                Go to Dashboard →
+              </button>
+            </div>
+          ) : (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-100 mb-2 text-left">
+                Pricing
+              </h2>
+              <div className="text-sm text-gray-400 mb-6 max-w-3xl text-left">
+                Build a consistent habit — pick a plan that fits your schedule.
+                Upgrade now and save with limited-time offers.
+              </div>
 
-          {/* Mobile-first pricing layout */}
-          <div className="block xl:hidden mb-8">
-            {/* Mobile: Plan selector first */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                Choose your plan:
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {_plans.map((p) => {
-                  const active = selectedKey === p.key;
-                  return (
-                    <button
-                      key={p.key}
-                      onClick={() => setSelectedKey(p.key)}
-                      className={`p-3 rounded-lg text-center transition-all duration-200 relative ${
-                        active
-                          ? "bg-gradient-to-r from-accent to-purple-500 text-white shadow-lg scale-105"
-                          : "bg-gray-800/60 text-gray-300 hover:bg-gray-700/60"
-                      }`}
-                    >
-                      {active && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-900"></div>
-                      )}
-                      <div className="text-xs font-semibold mb-1">
-                        {p.title}
-                      </div>
-                      <div className="text-[10px] text-gray-400">{p.sub}</div>
-                      {p.discountPercent && (
-                        <div className="text-[10px] text-accent/80 font-medium mt-1">
-                          {p.discountPercent}% off
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+              {/* Mobile-first pricing layout */}
+              <div className="block xl:hidden mb-8">
+                {/* Mobile: Plan selector first */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-3">
+                    Choose your plan:
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {_plans.map((p) => {
+                      const active = selectedKey === p.key;
+                      return (
+                        <button
+                          key={p.key}
+                          onClick={() => setSelectedKey(p.key)}
+                          className={`p-3 rounded-lg text-center transition-all duration-200 relative ${
+                            active
+                              ? "bg-gradient-to-r from-accent to-purple-500 text-white shadow-lg scale-105"
+                              : "bg-gray-800/60 text-gray-300 hover:bg-gray-700/60"
+                          }`}
+                        >
+                          {active && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-900"></div>
+                          )}
+                          <div className="text-xs font-semibold mb-1">
+                            {p.title}
+                          </div>
+                          <div className="text-[10px] text-gray-400">
+                            {p.sub}
+                          </div>
+                          {p.discountPercent && (
+                            <div className="text-[10px] text-accent/80 font-medium mt-1">
+                              {p.discountPercent}% off
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Mobile: Selected plan details */}
+                <PlanArea selectedKey={selectedKey} />
+              </div>
+
+              {/* Desktop pricing layout */}
+              <div className="hidden xl:flex flex-row items-start justify-center gap-8">
+                {/* Left: Highlighted main plan (dynamic) */}
+                <div className="w-full max-w-md">
+                  <PlanArea selectedKey={selectedKey} />
+                </div>
+
+                {/* Right: Other plans grid */}
+                <div className="w-full max-w-2xl">
+                  <SmallPlansGridWrapper
+                    selectedKey={selectedKey}
+                    onSelect={(k) => setSelectedKey(k)}
+                    navigate={navigate}
+                  />
+                </div>
               </div>
             </div>
-
-            {/* Mobile: Selected plan details */}
-            <PlanArea selectedKey={selectedKey} />
-          </div>
-
-          {/* Desktop pricing layout */}
-          <div className="hidden xl:flex flex-row items-start justify-center gap-8">
-            {/* Left: Highlighted main plan (dynamic) */}
-            <div className="w-full max-w-md">
-              <PlanArea selectedKey={selectedKey} />
-            </div>
-
-            {/* Right: Other plans grid */}
-            <div className="w-full max-w-2xl">
-              <SmallPlansGridWrapper
-                selectedKey={selectedKey}
-                onSelect={(k) => setSelectedKey(k)}
-              />
-            </div>
-          </div>
+          )}
 
           <div className="text-[12px] text-gray-500 mt-8 text-center">
             Prices shown in INR.{" "}
@@ -1221,7 +1281,7 @@ export const LandingPage: React.FC = () => {
             </div>
             <button
               className="btn btn-primary"
-              onClick={() => navigate(user ? "/app" : "/auth")}
+              onClick={() => navigate(user ? "/dashboard" : "/auth")}
             >
               {user ? "Continue" : "Get Started"}
             </button>

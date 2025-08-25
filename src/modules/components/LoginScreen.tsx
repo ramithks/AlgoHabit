@@ -17,7 +17,7 @@ export const LoginScreen: React.FC = () => {
     try {
       const user = await login(email.trim(), password);
       // Redirect to app - the ProtectedPro wrapper will handle Pro status check
-      navigate("/app", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {

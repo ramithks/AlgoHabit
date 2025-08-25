@@ -10,7 +10,7 @@ export const OnboardingScreen: React.FC = () => {
   // If user is already Pro, redirect to app
   React.useEffect(() => {
     if (!loading && isPro) {
-      navigate("/app", { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [isPro, loading, navigate]);
 
@@ -120,7 +120,7 @@ export const OnboardingScreen: React.FC = () => {
           <div className="flex justify-center">
             <button
               onClick={() => {
-                navigate("/");
+                navigate("/home");
                 // Wait for navigation then scroll to pricing
                 setTimeout(() => {
                   const pricingElement = document.getElementById("pricing");
